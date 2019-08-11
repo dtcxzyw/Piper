@@ -1,0 +1,40 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <ClCompile Include="..\..\Src\Piper\main.cpp" />
+    <ClCompile Include="..\..\Src\Piper\SceneLoader.cpp" />
+    <ClCompile Include="..\..\Src\Piper\ModuleLoader.cpp" />
+    <ClCompile Include="..\..\Src\Piper\PluginShared.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="..\..\Src\Piper\SceneLoader.hpp" />
+    <ClInclude Include="..\..\Src\PluginShared.hpp" />
+    <ClInclude Include="..\..\Src\Piper\ModuleLoader.hpp" />
+    <ClInclude Include="..\..\Src\Cameras\CameraAPI.hpp">
+      <Filter>API</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\Src\Shared.hpp" />
+    <ClInclude Include="..\..\Src\Common.hpp" />
+    <ClInclude Include="..\..\Src\CUDA.hpp" />
+    <ClInclude Include="..\..\Src\Materials\MaterialAPI.hpp">
+      <Filter>API</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\Src\Drivers\DriverAPI.hpp">
+      <Filter>API</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\Src\Lights\LightAPI.hpp">
+      <Filter>API</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\Src\Integrators\IntegratorAPI.hpp">
+      <Filter>API</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <Filter Include="API">
+      <UniqueIdentifier>{1399b6e0-1bb8-4337-b1ed-1902274a1bb3}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <CustomBuild Include="..\..\Src\Piper\Default.cu" />
+  </ItemGroup>
+</Project>
