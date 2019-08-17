@@ -16,7 +16,7 @@ Plugin<T>::Plugin(const std::string& name) {
     else {
         std::ostringstream str;
         using Dbg = Corrade::Utility::Debug;
-        Dbg(Dbg::Flag::DisableColors |
+        Dbg(&str, Dbg::Flag::DisableColors |
             Dbg::Flag::NoNewlineAtTheEnd)
             << st;
         throw std::runtime_error(
@@ -26,3 +26,18 @@ Plugin<T>::Plugin(const std::string& name) {
 
 #include "../Cameras/CameraAPI.hpp"
 template class Plugin<Camera>;
+
+#include "../Lights/LightAPI.hpp"
+template class Plugin<Light>;
+
+#include "../Materials/MaterialAPI.hpp"
+template class Plugin<Material>;
+
+#include "../Drivers/DriverAPI.hpp"
+template class Plugin<Driver>;
+
+#include "../Integrators/IntegratorAPI.hpp"
+template class Plugin<Integrator>;
+
+#include "../Geometries/GeometryAPI.hpp"
+template class Plugin<Geometry>;

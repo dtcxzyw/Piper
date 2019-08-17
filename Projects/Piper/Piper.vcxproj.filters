@@ -2,20 +2,19 @@
 <Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup>
     <ClCompile Include="..\..\Src\Piper\main.cpp" />
-    <ClCompile Include="..\..\Src\Piper\SceneLoader.cpp" />
     <ClCompile Include="..\..\Src\Piper\ModuleLoader.cpp" />
-    <ClCompile Include="..\..\Src\Piper\PluginShared.cpp" />
+    <ClCompile Include="..\..\Src\Piper\PluginShared.cpp">
+      <Filter>Shared</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\Src\Piper\CameraAdapter.cpp">
+      <Filter>Adapters</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="..\..\Src\Piper\SceneLoader.hpp" />
-    <ClInclude Include="..\..\Src\PluginShared.hpp" />
     <ClInclude Include="..\..\Src\Piper\ModuleLoader.hpp" />
     <ClInclude Include="..\..\Src\Cameras\CameraAPI.hpp">
       <Filter>API</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\Src\Shared.hpp" />
-    <ClInclude Include="..\..\Src\Common.hpp" />
-    <ClInclude Include="..\..\Src\CUDA.hpp" />
     <ClInclude Include="..\..\Src\Materials\MaterialAPI.hpp">
       <Filter>API</Filter>
     </ClInclude>
@@ -28,10 +27,34 @@
     <ClInclude Include="..\..\Src\Integrators\IntegratorAPI.hpp">
       <Filter>API</Filter>
     </ClInclude>
+    <ClInclude Include="..\..\Src\Common.hpp">
+      <Filter>Shared</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\Src\CUDA.hpp">
+      <Filter>Shared</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\Src\Shared.hpp">
+      <Filter>Shared</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\Src\PluginShared.hpp">
+      <Filter>Shared</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\Src\Piper\CameraAdapter.hpp">
+      <Filter>Adapters</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\Src\Geometries\GeometryAPI.hpp">
+      <Filter>API</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <Filter Include="API">
       <UniqueIdentifier>{1399b6e0-1bb8-4337-b1ed-1902274a1bb3}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Shared">
+      <UniqueIdentifier>{c22b50c1-dca6-4552-9151-6b41c82effb1}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Adapters">
+      <UniqueIdentifier>{fce739bd-a221-4b63-8676-cf71affb2686}</UniqueIdentifier>
     </Filter>
   </ItemGroup>
   <ItemGroup>

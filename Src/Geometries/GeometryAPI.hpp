@@ -1,22 +1,21 @@
 #pragma once
 #include "../PluginShared.hpp"
 
-class Material : public PluginSharedAPI {
+class Geometry : public PluginSharedAPI {
 public:
     static std::string pluginInterface() {
-        return "Piper.Material:1";
+        return "Piper.Geometry:1";
     }
 
     static std::vector<std::string> pluginSearchPaths() {
-        return { "Plugins/Materials" };
+        return { "Plugins/Geometries" };
     }
 
-    explicit Material(PM::AbstractManager &manager,
+    explicit Geometry(PM::AbstractManager &manager,
         const std::string &plugin)
         : PluginSharedAPI{ manager, plugin } {}
 
     virtual void init(PluginHelper helper, JsonHelper config,
         const fs::path &modulePath) = 0;
-
-    virtual optix::Material getMaterial() const = 0;
+    virtual optix::Geometry getGeometry() = 0;
 };

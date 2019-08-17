@@ -8,7 +8,7 @@ private:
     std::shared_ptr<T> mPtr;
 
 public:
-    Plugin(const std::string& name);
+    explicit Plugin(const std::string &name);
     const T* operator->() const {
         return mPtr.get();
     }

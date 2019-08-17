@@ -17,6 +17,9 @@ using Corrade::Utility::Warning;
 #define DEBUG \
     Debug() << Debug::color(Debug::Color::White) \
             << "Debug:"
+#define INFO \
+    Debug() << Debug::color(Debug::Color::Green) \
+            << "Info:"
 #define ASSERT(expr, msg) if(!(expr))FATAL<<\
 __FUNCTION__<<"(at line "<<__LINE__<<"):"<<msg;
 #pragma warning(pop)

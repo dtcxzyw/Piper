@@ -24,12 +24,13 @@ public:
         return make_uint2(mWidth, mHeight);
     }
     void doRender() override {
-        optix::Buffer outputBuffer = mContext->createBuffer(RT_BUFFER_OUTPUT,
-            RT_FORMAT_FLOAT4, mWidth, mHeight);
+        optix::Buffer outputBuffer = mContext->createBuffer(
+            RT_BUFFER_INPUT_OUTPUT, RT_FORMAT_FLOAT4, mWidth, mHeight);
         {
             BufferMapGuard guard(outputBuffer, RT_BUFFER_MAP_WRITE_DISCARD);
             memset(guard.raw(), 0, sizeof(float4) * mWidth * mHeight);
         }
+        outputBuffer->validate();
         mContext["driverOutputBuffer"]->set(outputBuffer);
         mContext["driverBegin"]->setUint(make_uint2(0));
         for (unsigned i = 0; i < mSample; ++i) {

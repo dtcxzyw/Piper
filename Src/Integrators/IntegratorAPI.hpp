@@ -1,7 +1,7 @@
 #pragma once
 #include "../PluginShared.hpp"
 
-class Integrator : public PM::AbstractPlugin {
+class Integrator : public PluginSharedAPI {
 public:
     static std::string pluginInterface() {
         return "Piper.Integrator:1";
@@ -12,7 +12,7 @@ public:
     }
 
     explicit Integrator(PM::AbstractManager &manager,
-        const std::string &plugin) : AbstractPlugin{ manager, plugin } {}
+        const std::string &plugin) : PluginSharedAPI{ manager, plugin } {}
 
     virtual optix::Program init(PluginHelper helper, JsonHelper config,
         const fs::path &modulePath, const fs::path &cameraPTX) = 0;

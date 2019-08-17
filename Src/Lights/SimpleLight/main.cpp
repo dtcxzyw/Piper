@@ -19,6 +19,7 @@ static LightProgram dirLight(PluginHelper helper, JsonHelper cfg, const fs::path
         data.direction = normalize(cfg->toVec3("Direction"));
         data.distance = cfg->toFloat("Distance");
     }
+    buf->validate();
     contents.emplace_back(buf);
     optix::Program prog = helper->compile("sample", { "DirLight.ptx" }, mp);
     contents.emplace_back(prog);

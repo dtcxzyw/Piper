@@ -45,6 +45,7 @@ public:
             throw std::runtime_error("No PBRTv3's material named \""
             + typeName + "\"");
         iter->second(helper, config, modulePath, mMaterial, mContents);
+        mMaterial->validate();
     }
 
     optix::Material getMaterial() const override {

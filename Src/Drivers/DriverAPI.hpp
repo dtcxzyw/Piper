@@ -1,7 +1,7 @@
 #pragma once
 #include "../PluginShared.hpp"
 
-class Driver : public PM::AbstractPlugin {
+class Driver : public PluginSharedAPI {
 public:
     static std::string pluginInterface() {
         return "Piper.Driver:1";
@@ -13,7 +13,7 @@ public:
 
     explicit Driver(PM::AbstractManager &manager,
         const std::string &plugin)
-        : AbstractPlugin{ manager, plugin } {}
+        : PluginSharedAPI{ manager, plugin } {}
 
     virtual uint2 init(PluginHelper helper, JsonHelper config,
         const fs::path &modulePath) = 0;

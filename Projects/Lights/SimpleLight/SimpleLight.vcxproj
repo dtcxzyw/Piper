@@ -91,7 +91,7 @@
   <ItemGroup>
     <CustomBuild Include="..\..\..\Src\Lights\SimpleLight\DirLight.cu">
       <FileType>Document</FileType>
-      <Command Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">nvcc %(FullPath) -o $(TargetDir)$(ProjectName)\%(Filename).ptx  -I "$(CUDA_PATH)\include";"$(OPTIX_PATH)include" -include $(PIPER_THIRDPARTY_PATH)/include/glm/glm.hpp -cudart=none -ptx -O2 -m64 -arch=sm_50 -use_fast_math -w -rdc=true</Command>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">nvcc %(FullPath) -o $(TargetDir)$(ProjectName)\%(Filename).ptx  -I "$(CUDA_PATH)\include";"$(OPTIX_PATH)include" -cudart=none -ptx -O2 -m64 -arch=sm_50 -use_fast_math -w -rdc=true</Command>
       <LinkObjects Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">false</LinkObjects>
       <BuildInParallel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</BuildInParallel>
       <Command Condition="'$(Configuration)|$(Platform)'=='Release|x64'">nvcc %(FullPath) -o $(TargetDir)$(ProjectName)\%(Filename).ptx  -I "$(CUDA_PATH)\include";"$(OPTIX_PATH)include" -cudart=none -ptx -O2 -m64 -arch=sm_50 -use_fast_math -w -rdc=true</Command>

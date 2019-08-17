@@ -1,4 +1,5 @@
 #include "../PluginShared.hpp"
+#include <sstream>
 
 #define ASSERTCONFIG(expr) ASSERT(expr,msg+"(path="+mPath+")")
 
@@ -39,6 +40,25 @@ public:
         ++beg;
         ASSERTCONFIG(beg->is_number_float());
         res.z = static_cast<float>(beg->get<double>());
+        return res;
+    }
+    Vec4 toVec4(const std::string &attr) override {
+        const Json &config = access(attr);
+        static const  std::string msg = "Need Vec4.";
+        ASSERTCONFIG(config.is_array() && config.size() == 4);
+        Vec4 res;
+        auto beg = config.cbegin();
+        ASSERTCONFIG(beg->is_number_float());
+        res.x = static_cast<float>(beg->get<double>());
+        ++beg;
+        ASSERTCONFIG(beg->is_number_float());
+        res.y = static_cast<float>(beg->get<double>());
+        ++beg;
+        ASSERTCONFIG(beg->is_number_float());
+        res.z = static_cast<float>(beg->get<double>());
+        ++beg;
+        ASSERTCONFIG(beg->is_number_float());
+        res.w = static_cast<float>(beg->get<double>());
         return res;
     }
     Vec2 toVec2(const std::string &attr) override {
@@ -131,6 +151,16 @@ public:
             return toFloat(attr);
         return def;
     }
+    Vec3 getVec3(const std::string &attr, const Vec3 &def) override {
+        if (hasAttr(attr))
+            return toVec3(attr);
+        return def;
+    }
+    Vec4 getVec4(const std::string &attr, const Vec4 &def)override {
+        if (hasAttr(attr))
+            return toVec4(attr);
+        return def;
+    }
     unsigned toUint(const std::string &attr) override {
         const Json &config = access(attr);
         static const std::string msg = "Need unsigned integer.";
@@ -147,7 +177,7 @@ class PluginHelperImpl final :public PluginHelperAPI {
 private:
     optix::Context mContext;
     fs::path mRuntimeLib, mScenePath;
-    std::map<size_t, optix::Program> mCachedPrograms;
+    //std::map<size_t, optix::Program> mCachedPrograms;
 public:
     PluginHelperImpl(optix::Context context, const fs::path &runtimeLib,
         const fs::path &scenePath)
@@ -160,7 +190,8 @@ public:
     }
     optix::Program compile(const std::string &entry,
         const std::vector<std::string> &selfLibs, const fs::path &modulePath,
-        const std::vector<fs::path> &thirdParty) {
+        const std::vector<fs::path> &thirdParty, bool needLib) {
+        /*
         std::hash<std::string> hasher;
         size_t hashValue = hasher("RTL@" + mRuntimeLib.string()) ^
             hasher("ENTRY@" + entry) ^
@@ -172,13 +203,25 @@ public:
         auto iter = mCachedPrograms.find(hashValue);
         if (iter != mCachedPrograms.cend())
             return iter->second;
-        std::vector<std::string> files{ mRuntimeLib.string() };
+        */
+        std::vector<std::string> files;
+        if (needLib)files.emplace_back(mRuntimeLib.string());
         for (const auto &third : thirdParty)
             files.emplace_back(third.string());
         for (const auto &lib : selfLibs)
             files.emplace_back((modulePath / lib).string());
-        optix::Program res = mContext->createProgramFromPTXFiles(files, entry);
-        return mCachedPrograms[hashValue] = res;
+        try {
+            optix::Program res = mContext->createProgramFromPTXFiles(files, entry);
+            res->validate();
+            //return mCachedPrograms[hashValue] = res;
+            return res;
+        }
+        catch (const std::exception &ex) {
+            std::stringstream ss;
+            for (auto f : files)
+                ss << f << ",";
+            FATAL << "Complier error[entry=" << entry << ",file=" << ss.str() << "]:" << ex.what();
+        }
     }
     TextureHolder loadTexture(TextureChannel channel, JsonHelper attr) override;
 };
@@ -271,43 +314,54 @@ TextureHolder PluginHelperImpl::loadTexture(TextureChannel channel,
         }
         break;
     }
+    buffer->validate();
     optix::TextureSampler sampler = mContext->createTextureSampler();
-    {
-        auto read = [&] (const std::string &str, const std::string &def) {
-            auto filter = attr->getString(str, def);
-            if (filter == "Linear")
-                return RT_FILTER_LINEAR;
-            else if (filter == "Nearest")
-                return RT_FILTER_NEAREST;
-            else if (filter == "None")
-                return RT_FILTER_NONE;
-            else FATAL << "Unknown filter " << filter << "(path="
-                << attr->path() << ").";
-        };
-        sampler->setFilteringModes(read("MinFilter", "Linear"),
-            read("MagFilter", "Linear"),
-            read("MipMapFilter", "None"));
+    if (attr->getType() == Json::value_t::object) {
+        {
+            auto read = [&] (const std::string &str, const std::string &def) {
+                auto filter = attr->getString(str, def);
+                if (filter == "Linear")
+                    return RT_FILTER_LINEAR;
+                else if (filter == "Nearest")
+                    return RT_FILTER_NEAREST;
+                else if (filter == "None")
+                    return RT_FILTER_NONE;
+                else FATAL << "Unknown filter " << filter << "(path="
+                    << attr->path() << ").";
+            };
+            sampler->setFilteringModes(read("MinFilter", "Linear"),
+                read("MagFilter", "Linear"),
+                read("MipMapFilter", "None"));
+        }
+        {
+            auto read = [&] (const std::string &str, const std::string &def) {
+                auto mode = attr->getString(str, def);
+                if (mode == "Repeat")
+                    return RT_WRAP_REPEAT;
+                else if (mode == "Mirror")
+                    return RT_WRAP_MIRROR;
+                else if (mode == "ClampToBorder")
+                    return RT_WRAP_CLAMP_TO_BORDER;
+                else if (mode == "ClampToEdge")
+                    return RT_WRAP_CLAMP_TO_EDGE;
+                else FATAL << "Unknown warp mode " << mode << "(path="
+                    << attr->path() << ").";
+            };
+            sampler->setWrapMode(0, read("WarpS", "Repeat"));
+            sampler->setWrapMode(1, read("WarpT", "Repeat"));
+        }
+        sampler->setMaxAnisotropy(attr->getFloat("MaxAnisotropy", 1.0f));
+    }
+    else {
+        sampler->setFilteringModes(RT_FILTER_NEAREST, RT_FILTER_NEAREST,
+            RT_FILTER_NONE);
+        sampler->setWrapMode(0, RT_WRAP_CLAMP_TO_EDGE);
+        sampler->setWrapMode(1, RT_WRAP_CLAMP_TO_EDGE);
     }
     sampler->setIndexingMode(RT_TEXTURE_INDEX_NORMALIZED_COORDINATES);
-    {
-        auto read = [&] (const std::string &str, const std::string &def) {
-            auto mode = attr->getString(str, def);
-            if (mode == "Repeat")
-                return RT_WRAP_REPEAT;
-            else if (mode == "Mirror")
-                return RT_WRAP_MIRROR;
-            else if (mode == "ClampToBorder")
-                return RT_WRAP_CLAMP_TO_BORDER;
-            else if (mode == "ClampToEdge")
-                return RT_WRAP_CLAMP_TO_EDGE;
-            else FATAL << "Unknown warp mode " << mode << "(path="
-                << attr->path() << ").";
-        };
-        sampler->setWrapMode(0, read("WarpS", "Repeat"));
-        sampler->setWrapMode(1, read("WarpT", "Repeat"));
-    }
     sampler->setReadMode(RT_TEXTURE_READ_ELEMENT_TYPE);
-    sampler->setMaxAnisotropy(attr->getFloat("MaxAnisotropy", 1.0f));
+    sampler->setBuffer(buffer);
+    sampler->validate();
     TextureHolder res;
     res.data = buffer;
     res.sampler = sampler;

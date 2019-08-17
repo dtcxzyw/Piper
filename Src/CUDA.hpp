@@ -106,7 +106,7 @@ struct RaySample final {
 };
 
 class Light;
-DEVICE LightSample sampleOneLight();
+DEVICE LightSample sampleOneLight(const Vec3 &ori, float u);
 
 struct ShadingSpace final {
     optix::Onb base;
@@ -118,7 +118,6 @@ struct ShadingSpace final {
             dot(dir, base.m_normal));
     }
 };
-DEVICE ShadingSpace calcPayload();
 
 struct Payload final {
     Vec3 ori;
@@ -127,6 +126,8 @@ struct Payload final {
     uint32 index;
     bool hit;
 };
+
+DEVICE ShadingSpace calcPayload(Payload& payload);
 
 struct PayloadShadow final {
     bool hit;

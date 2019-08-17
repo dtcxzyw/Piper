@@ -7,7 +7,7 @@ struct LightProgram final {
     rtBufferId<char, 1> buf;
 };
 
-class Light : public PM::AbstractPlugin {
+class Light : public PluginSharedAPI {
 public:
     static std::string pluginInterface() {
         return "Piper.Light:1";
@@ -19,7 +19,7 @@ public:
 
     explicit Light(PM::AbstractManager &manager,
         const std::string &plugin)
-        : AbstractPlugin{ manager, plugin } {}
+        : PluginSharedAPI{ manager, plugin } {}
 
     virtual LightProgram init(PluginHelper helper, JsonHelper config,
         const fs::path &modulePath) = 0;

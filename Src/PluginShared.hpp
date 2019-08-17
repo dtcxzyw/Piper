@@ -21,6 +21,9 @@ class JsonHelperAPI {
 public:
     virtual std::string getString(const std::string &attr, const std::string &def) = 0;
     virtual float getFloat(const std::string &attr, float def) = 0;
+    virtual Vec3 getVec3(const std::string &attr, const Vec3 &def) = 0;
+    virtual Vec4 getVec4(const std::string &attr, const Vec4 &def) = 0;
+    virtual Vec4 toVec4(const std::string &attr) = 0;
     virtual Vec3 toVec3(const std::string &attr) = 0;
     virtual Vec2 toVec2(const std::string &attr) = 0;
     virtual uint2 toUint2(const std::string &attr) = 0;
@@ -48,7 +51,16 @@ enum class TextureChannel {
     Float = 1, Float2 = 2, Float4 = 4
 };
 
-class BufferMapGuard final {
+class Unmoveable {
+public:
+    Unmoveable() = default;
+    Unmoveable(const Unmoveable &) = delete;
+    Unmoveable(Unmoveable &&) = delete;
+    Unmoveable &operator=(const Unmoveable &) = delete;
+    Unmoveable &operator=(Unmoveable &&) = delete;
+};
+
+class BufferMapGuard final :private Unmoveable {
 private:
     void *mPtr;
     optix::Buffer mBuffer;
@@ -57,10 +69,6 @@ public:
     BufferMapGuard(optix::Buffer buf, RTbuffermapflag flag,
         unsigned level = 0U) :mPtr(buf->map(level, flag)), mBuffer(buf),
         mLevel(level) {}
-    BufferMapGuard(const BufferMapGuard &) = delete;
-    BufferMapGuard(BufferMapGuard &&) = delete;
-    BufferMapGuard &operator=(const BufferMapGuard &) = delete;
-    BufferMapGuard &operator=(BufferMapGuard &&) = delete;
     void *raw() {
         return mPtr;
     }
@@ -83,7 +91,7 @@ public:
     virtual fs::path scenePath() const = 0;
     virtual optix::Program compile(const std::string &entry,
         const std::vector<std::string> &selfLibs, const fs::path &modulePath,
-        const std::vector<fs::path> &thirdParty = {}) = 0;
+        const std::vector<fs::path> &thirdParty = {}, bool needLib = true) = 0;
     virtual TextureHolder loadTexture(TextureChannel channel, JsonHelper attr) = 0;
     virtual ~PluginHelperAPI() = default;
 };
@@ -92,3 +100,11 @@ using PluginHelper=std::shared_ptr<PluginHelperAPI>;
 
 PluginHelper buildPluginHelper(optix::Context context, const fs::path &runtimeLib,
     const fs::path &scenePath);
+
+class PluginSharedAPI :public PM::AbstractPlugin {
+public:
+    explicit PluginSharedAPI(PM::AbstractManager &manager,
+        const std::string &plugin)
+        : AbstractPlugin{ manager, plugin } {}
+    virtual void command(int argc, char **argv) {};
+};
