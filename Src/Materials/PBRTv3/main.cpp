@@ -11,7 +11,7 @@ static void plastic(PluginHelper helper, JsonHelper cfg, const fs::path &mp,
     optix::Material mat, std::vector<std::any> &contents) {
     optix::Program hitProgram = helper->compile("closestHit",
         { "BxDF.ptx", "Fresnel.ptx", "Microfact.ptx", "Plastic.ptx" }, mp);
-    mat->setAnyHitProgram(0, hitProgram);
+    mat->setClosestHitProgram(radianceRayType, hitProgram);
     contents.emplace_back(hitProgram);
     auto bindTexture = [&] (const std::string &attr, TextureChannel channel) {
         TextureHolder tex = helper->loadTexture(channel, cfg->attribute(attr));

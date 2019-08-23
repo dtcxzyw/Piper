@@ -6,13 +6,14 @@ rtDeclareVariable(unsigned, integratorSample, , );
 rtBuffer<float4, 2> driverOutputBuffer;
 rtDeclareVariable(uint2, driverBegin, , );
 rtDeclareVariable(unsigned, driverIndex, , );
+rtDeclareVariable(int, driverFiltBadColor, , );
 rtDeclareVariable(uint2, launchIndex, rtLaunchIndex, );
 
 DEVICE void sampleRay(uint2 pixel, RaySample &sample, uint32 &seed);
 
 RT_PROGRAM void traceKernel() {
     Spectrum res = black;
-    uint2 pixelPos = driverBegin + launchIndex;
+    uint2 pixelPos = launchIndex;
     optix::size_t2 filmSize = driverOutputBuffer.size();
     uint32 id = filmSize.x * (driverIndex * filmSize.y + pixelPos.y) + pixelPos.x;
     for (uint32 i = 0; i < integratorSample; ++i) {
@@ -30,7 +31,7 @@ RT_PROGRAM void traceKernel() {
             payload.hit = false;
             payload.f = black;
             payload.rad = black;
-            rtTrace(globalTopNode, curRay,payload, geometryMask | lightVolumeMask);
+            rtTrace(globalTopNode, curRay, payload, geometryMask | lightVolumeMask);
             seed = payload.index;
             res += att * payload.rad;
             att *= payload.f;
@@ -38,6 +39,8 @@ RT_PROGRAM void traceKernel() {
                 break;
         }
     }
+    if (driverFiltBadColor & !(isfinite(res.x) & isfinite(res.y) & isfinite(res.z)))
+        return;
     driverOutputBuffer[pixelPos] +=
         make_float4(res, static_cast<float>(integratorSample));
 }

@@ -2,9 +2,7 @@
 #include "../PluginShared.hpp"
 
 struct LightProgram final {
-    rtCallableProgramId<LightSample(const Mat4 &,
-        rtBufferId<char, 1>, const Vec3 &)> prog;
-    rtBufferId<char, 1> buf;
+    int prog, buf;
 };
 
 class Light : public PluginSharedAPI {
@@ -23,4 +21,5 @@ public:
 
     virtual LightProgram init(PluginHelper helper, JsonHelper config,
         const fs::path &modulePath) = 0;
+    virtual optix::Program getProgram() = 0;
 };

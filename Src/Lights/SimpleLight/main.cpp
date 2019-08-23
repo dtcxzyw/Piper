@@ -5,11 +5,13 @@
 #include "DataDesc.hpp"
 
 using LightBuilder = std::function<LightProgram(PluginHelper helper,
-    JsonHelper cfg, const fs::path &modulePath, std::vector<std::any> &contents)>;
+    JsonHelper cfg, const fs::path &modulePath, optix::Program &prog,
+    std::vector<std::any> &contents)>;
 
-static LightProgram dirLight(PluginHelper helper, JsonHelper cfg, const fs::path &mp,
+static LightProgram dirLight(PluginHelper helper, JsonHelper cfg,
+    const fs::path &mp, optix::Program &prog,
     std::vector<std::any> &contents) {
-    optix::Context context=helper->getContext();
+    optix::Context context = helper->getContext();
     optix::Buffer buf = context->createBuffer(RT_BUFFER_INPUT,
         RTformat::RT_FORMAT_BYTE, sizeof(DirLight));
     {
@@ -21,8 +23,7 @@ static LightProgram dirLight(PluginHelper helper, JsonHelper cfg, const fs::path
     }
     buf->validate();
     contents.emplace_back(buf);
-    optix::Program prog = helper->compile("sample", { "DirLight.ptx" }, mp);
-    contents.emplace_back(prog);
+    prog = helper->compile("sample", { "DirLight.ptx" }, mp);
     LightProgram res;
     res.prog = prog->getId();
     res.buf = buf->getId();
@@ -36,6 +37,7 @@ static const std::map<std::string, LightBuilder> builders = {
 class SimpleLight final : public Light {
 private:
     std::vector<std::any> mContents;
+    optix::Program mProgram;
 public:
     explicit SimpleLight(PM::AbstractManager &manager,
         const std::string &plugin) : Light{ manager, plugin } {}
@@ -47,7 +49,10 @@ public:
         if (iter == builders.end())
             throw std::runtime_error("No SimpleLight's light named \""
             + typeName + "\"");
-        return iter->second(helper, config, modulePath, mContents);
+        return iter->second(helper, config, modulePath, mProgram, mContents);
+    }
+    optix::Program getProgram() override {
+        return mProgram;
     }
 };
 CORRADE_PLUGIN_REGISTER(SimpleLight, SimpleLight, "Piper.Light:1")

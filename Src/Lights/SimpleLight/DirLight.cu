@@ -4,9 +4,9 @@
 rtDeclareVariable(rtObject, globalTopNode, , );
 
 RT_CALLABLE_PROGRAM LightSample sample(const Mat4 &,
-    rtBufferId<char, 1> buf, const Vec3 &wi) {
+    rtBufferId<char, 1> buf, const Vec3 &pos) {
     const DirLight *light = reinterpret_cast<DirLight *>(&buf[0]);
-    Vec3 ori = light->distance * light->direction + wi;
+    Vec3 ori = pos - light->distance * light->direction;
     optix::Ray ray = optix::make_Ray(ori, light->direction, shadowRayType,
         0.0f, light->distance - eps);
     PayloadShadow shadow;

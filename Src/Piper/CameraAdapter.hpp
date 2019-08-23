@@ -6,7 +6,7 @@ private:
     Plugin<Camera> mImpl;
     Vec3 mPos;
     Quaternion mPosture;
-    float mFocalLength, mFStop;
+    float mFocalLength, mFStop, mFocalDistance;
     fs::path mPTX;
 public:
     explicit CameraAdapter(JsonHelper config, PluginHelper helper);

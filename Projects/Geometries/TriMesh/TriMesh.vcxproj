@@ -99,9 +99,6 @@
     </CustomBuildStep>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClInclude Include="..\..\..\Src\Geometries\TriMesh\DataDesc.hpp" />
-  </ItemGroup>
-  <ItemGroup>
     <ClCompile Include="..\..\..\Src\Geometries\TriMesh\main.cpp" />
     <ClCompile Include="..\..\..\Src\Geometries\TriMesh\MeshConverter.cpp" />
     <ClCompile Include="..\..\..\Src\Geometries\TriMesh\MeshLoader.cpp" />

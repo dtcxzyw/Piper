@@ -18,7 +18,7 @@ public:
     virtual fs::path init(PluginHelper helper, JsonHelper device, const fs::path &modulePath) = 0;
 
     virtual void setArgs(optix::Program prog, float focalLength, float fStop,
-        uint2 fullFilm, Vec3 pos, const Quaternion &posture) const = 0;
+        float focalDistance, uint2 fullFilm, Vec3 pos, const Quaternion &posture) const = 0;
 };
 
 inline float toFov(float focalLength, Vec2 sensor) {

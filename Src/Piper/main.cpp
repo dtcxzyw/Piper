@@ -25,11 +25,13 @@ optix::Context createContext(JsonHelper config) {
         sizeof(int), &RTXMode);
     optix::Context context = optix::Context::create();
     context->checkErrorNoGetContext(res);
-    context->setExceptionEnabled(RT_EXCEPTION_ALL, false);
+    context->setExceptionEnabled(RT_EXCEPTION_ALL, true);
     context->setEntryPointCount(1);
     context->setRayTypeCount(2);
     context->setDiskCacheLocation("Cache");
     context->setAttribute(RT_CONTEXT_ATTRIBUTE_DISK_CACHE_ENABLED, 1);
+    context->setPrintEnabled(true);
+    context->setPrintBufferSize(1048576);
     return context;
 }
 
@@ -157,16 +159,18 @@ void parseNode(JsonHelper root, const MaterialLib &mat, const LightLib &light
     }
     else if (type == "Geometry") {
         optix::GeometryInstance inst = context->createGeometryInstance();
-        inst->setGeometry(access(geo, name)->getGeometry());
+        access(geo, name)->setInstance(inst);
         inst->setMaterialCount(1);
         inst->setMaterial(0, access(mat, root->toString("Material"))->getMaterial());
+        inst->validate();
         content.emplace_back(inst);
         optix::GeometryGroup gg = context->createGeometryGroup();
         optix::Acceleration acc = context->createAcceleration("Trbvh");
         gg->setAcceleration(acc);
         gg->addChild(inst);
-        gg->setVisibilityMask(geometryMask);
-        group->addChild(gg);
+        gg->setVisibilityMask(255);
+        gg->validate();
+        context["globalTopNode"]->set(gg);
         content.emplace_back(gg);
         content.emplace_back(acc);
     }
@@ -179,31 +183,46 @@ void renderImpl(JsonHelper config, const fs::path &scenePath) {
     std::string runtimeLib = global->toString("RuntimeLib");
     PluginHelper helper = buildPluginHelper(context, fs::current_path() / "Libs" /
         runtimeLib, scenePath);
+    INFO << "Loading camera";
     CameraAdapter camera(config->attribute("Camera"), helper);
+    INFO << "Loading materials";
     MaterialLib materials = loadMaterials(config->attribute("MaterialLib"), helper);
+    INFO << "Loading lights";
     std::vector<Plugin<Light>> lig;
     LightLib lights = loadLights(config->attribute("LightLib"), helper, lig);
+    INFO<<"Configurating lights";
+    std::vector<int> progs;
+    for (auto light : lights)
+        progs.push_back(light.second.prog);
+    for (auto mat : materials) {
+        optix::Program prog = mat.second->getMaterial()->getClosestHitProgram(radianceRayType);
+        prog->setCallsitePotentialCallees("call_in_sampleOneLight", progs);
+    }
+    INFO << "Loading integrator";
     optix::Program inteProg;
     Plugin<Integrator> integrator = loadIntegrator(config->attribute("Integrator"),
         helper, camera.getPTX(), inteProg);
     context->setRayGenerationProgram(0, inteProg);
+    INFO << "Loading driver";
     uint2 filmSize;
     Plugin<Driver> driver = loadDriver(config->attribute("Driver"), helper,
         filmSize);
     camera.prepare(inteProg, filmSize);
+    INFO << "Loading geometries";
     GeometryLib geos = loadGeometries(config->attribute("GeometryLib"), helper);
+    INFO << "Loading scene";
     std::vector<LightInfo> lightInst;
     std::vector<std::any> content;
     optix::Group group = context->createGroup();
     optix::Acceleration acc = context->createAcceleration("Trbvh");
     group->setAcceleration(acc);
-    group->setVisibilityMask(geometryMask);
+    group->setVisibilityMask(255);
     group->validate();
+    context["globalTopNode"]->set(group);
     parseChildren(config->attribute("Scene"), materials, lights, geos, lightInst,
         content, group, context);
-    context["globalTopNode"]->set(group);
-    optix::Buffer lightMat = context->createBuffer(RT_BUFFER_INPUT, 
-    RT_FORMAT_USER, lightInst.size());
+    optix::Buffer lightMat = context->createBuffer(RT_BUFFER_INPUT,
+        RT_FORMAT_USER, lightInst.size());
     {
         lightMat->setElementSize(sizeof(Mat4));
         BufferMapGuard guard(lightMat, RT_BUFFER_MAP_WRITE_DISCARD);
@@ -220,6 +239,7 @@ void renderImpl(JsonHelper config, const fs::path &scenePath) {
             guard.as<LightProgram>()[i] = lightInst[i].prog;
     }
     context["lightPrograms"]->set(lightProg);
+    INFO << "Everything is ready.";
     driver->doRender();
 }
 

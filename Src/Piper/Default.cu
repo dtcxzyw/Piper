@@ -61,25 +61,20 @@ DEVICE float sample6(uint32 index) {
 }
 
 rtDeclareVariable(optix::Ray, currentRay, rtCurrentRay, );
-rtDeclareVariable(float, tHit, rtIntersectionDistance, );
-rtDeclareVariable(Vec3, shadingNormal, attribute shadingNormal, );
-rtDeclareVariable(Vec3, geometricNormal, attribute geometricNormal, );
+rtDeclareVariable(Vec3, backHitPoint, attribute backHitPoint, );
+rtDeclareVariable(Vec3, frontHitPoint, attribute frontHitPoint, );
+rtDeclareVariable(Vec3, normal, attribute normal, );
 
 DEVICE ShadingSpace calcPayload(Payload& payload) {
-    Vec3 sn = normalize(rtTransformNormal(RT_OBJECT_TO_WORLD, shadingNormal));
-    Vec3 gn = normalize(rtTransformNormal(RT_OBJECT_TO_WORLD, geometricNormal));
-    sn = faceforward(sn, -currentRay.direction, gn);
     payload.hit = true;
-    payload.ori = currentRay.origin + tHit * currentRay.direction;
-    ShadingSpace res(sn);
+    payload.ori = frontHitPoint;
+    ShadingSpace res(normal);
     res.wo = res.toLocal(-currentRay.direction);
     return res;
 }
 
 struct LightProgram final {
-    rtCallableProgramId<LightSample(const Mat4 &,
-        rtBufferId<char>, const Vec3 &)> prog;
-    rtBufferId<char> buf;
+    int prog, buf;
 };
 
 rtBuffer<LightProgram> lightPrograms;
@@ -91,7 +86,9 @@ DEVICE LightSample sampleOneLight(const Vec3 &ori, float u) {
     if (size) {
         unsigned id = clamp(static_cast<unsigned>(u * size), 0U, size - 1U);
         LightProgram program = lightPrograms[id];
-        sample = program.prog(lightMatrices[id], program.buf, ori);
+        rtMarkedCallableProgramId<LightSample(const Mat4 &,
+            rtBufferId<char>, const Vec3 &)> prog(program.prog, "call_in_sampleOneLight");
+        sample = prog(lightMatrices[id], rtBufferId<char, 1>(program.buf), ori);
     }
     else sample.rad = black;
     return sample;

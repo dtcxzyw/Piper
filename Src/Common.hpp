@@ -14,7 +14,7 @@ using Vec4 = float4;
 using Mat4 = optix::Matrix4x4;
 using Mat3 = optix::Matrix3x3;
 using optix::Quaternion;
-using Spectrum = Vec3;//CIE XYZ D65
+using Spectrum = Vec3;
 
 struct LightSample final {
     Vec3 wi;
@@ -23,3 +23,14 @@ struct LightSample final {
 
 constexpr unsigned geometryMask = 1 << 0;
 constexpr unsigned lightVolumeMask = 1 << 1;
+constexpr unsigned radianceRayType = 0;
+constexpr unsigned shadowRayType = 1;
+
+enum class BxDFType {
+    Reflection = 1,
+    Transmission = 2,
+    Specular = 4,
+    Diffuse = 8,
+    Glossy = 16,
+    All = 31
+};

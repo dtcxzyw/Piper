@@ -1,5 +1,8 @@
 #include "../PluginShared.hpp"
 #include <sstream>
+#pragma warning(push,0)
+#include <glm/gtc/quaternion.hpp>
+#pragma warning(pop)
 
 #define ASSERTCONFIG(expr) ASSERT(expr,msg+"(path="+mPath+")")
 
@@ -167,6 +170,44 @@ public:
         ASSERTCONFIG(config.is_number_unsigned());
         return config.get<unsigned>();
     }
+    SRT getTransform(const std::string &attr) override {
+        SRT res;
+        res.trans = make_float3(0.0f), res.scale = make_float3(1.0f);
+        if (hasAttr(attr)) {
+            JsonHelper transform = attribute(attr);
+            res.trans = transform->getVec3("Trans", res.trans);
+            if (transform->hasAttr("Scale")) {
+                JsonHelper scale = transform->attribute("Scale");
+                if (scale->getType() == Json::value_t::number_float)
+                    res.scale = make_float3(transform->toFloat("Scale"));
+                else
+                    res.scale = transform->toVec3("Scale");
+            }
+            if (transform->hasAttr("Rotate")) {
+                JsonHelper rotate = transform->attribute("Rotate");
+                if (rotate->raw().size() == 3) {
+                    Vec3 euler = transform->toVec3("Rotate");
+                    glm::quat q = glm::angleAxis(euler.x, glm::vec3{ 1.0f, 0.0f, 0.0f })
+                        * glm::angleAxis(euler.y, glm::vec3{ 0.0f, 1.0f, 0.0f })
+                        * glm::angleAxis(euler.z, glm::vec3{ 0.0f, 0.0f, 1.0f });
+                    res.rotate = Quaternion(q.x, q.y, q.z, q.w);
+                    //Check
+                    glm::vec3 ang = glm::eulerAngles(q);
+                    ASSERT(ang.x == euler.x, "Bad quat cast");
+                    ASSERT(ang.y == euler.y, "Bad quat cast");
+                    ASSERT(ang.z == euler.z, "Bad quat cast");
+                }
+                else
+                    res.rotate = transform->toVec4("Rotate");
+            }
+        }
+        return res;
+    }
+    bool getBool(const std::string &attr, bool def) override {
+        if (hasAttr(attr))
+            return toBool(attr);
+        return def;
+    }
 };
 
 JsonHelper buildJsonHelper(const Json &root) {
@@ -291,11 +332,12 @@ TextureHolder PluginHelperImpl::loadTexture(TextureChannel channel,
         case Type::array:
         {
             auto elements = attr->expand();
-            if (static_cast<size_t>(channel) != elements.size())
+            bool fill = elements.size() == 3 && channel == TextureChannel::Float4;
+            if (static_cast<size_t>(channel) != elements.size() && !fill)
                 FATAL << "Need " << static_cast<int>(channel) << " channel but read "
                 << elements.size() << "(path=" << attr->path() << ")";
             float data[4];
-            for (int i = 0; i < static_cast<int>(channel); ++i) {
+            for (int i = 0; i < elements.size(); ++i) {
                 JsonHelper ele = elements[i];
                 ASSERT(ele->getType() == Type::number_float, "Need float.(path="
                     << attr->path() << ")");

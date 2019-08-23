@@ -11,8 +11,10 @@ CameraAdapter::CameraAdapter(JsonHelper config, PluginHelper helper)
     mFocalLength = config->toFloat("FocalLength");
     mFStop = config->toFloat("FStop");
     JsonHelper posture = config->attribute("Posture");
-    if (posture->getType() == Json::value_t::array)
+    if (posture->getType() == Json::value_t::array){
         mPosture = config->toVec4("Posture");
+        mFocalDistance = config->toFloat("FocalDistance");
+    }
     else {
         Vec3 lookAt = posture->toVec3("LookAt");
         Vec3 up = posture->toVec3("Up");
@@ -21,11 +23,13 @@ CameraAdapter::CameraAdapter(JsonHelper config, PluginHelper helper)
         };
         glm::quat q = glm::quatLookAtRH(cast(lookAt - mPos), cast(up));
         mPosture = Quaternion(q.x, q.y, q.z, q.w);
+        mFocalDistance = config->getFloat("FocalDistance", length(lookAt - mPos));
     }
 }
 
 void CameraAdapter::prepare(optix::Program rayGen, uint2 filmSize) {
-    mImpl->setArgs(rayGen, mFocalLength, mFStop, filmSize, mPos, mPosture);
+    mImpl->setArgs(rayGen, mFocalLength, mFStop, mFocalDistance, filmSize,
+        mPos, mPosture);
 }
 
 fs::path CameraAdapter::getPTX() const {

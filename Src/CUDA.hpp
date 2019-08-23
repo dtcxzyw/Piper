@@ -7,15 +7,13 @@
 
 #define DEVICE __device__ 
 #define CONSTANT static __constant__ __device__
-#define INLINEDEVICE __forceinline__ DEVICE
+#define INLINEDEVICE __inline__ DEVICE
 #define TextureSampler(T) rtTextureSampler<T, cudaTextureType2D, cudaReadModeElementType>
 
 constexpr float pi = M_PIf;
 constexpr float twoPi = 2.0 * M_PIf;
 constexpr float invPi = M_1_PIf;
 constexpr float eps = 1e-8f;
-constexpr unsigned radianceRayType = 0;
-constexpr unsigned shadowRayType = 1;
 
 using uint32=unsigned int;
 

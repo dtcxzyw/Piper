@@ -17,5 +17,5 @@ public:
 
     virtual void init(PluginHelper helper, JsonHelper config,
         const fs::path &modulePath) = 0;
-    virtual optix::Geometry getGeometry() = 0;
+    virtual void setInstance(optix::GeometryInstance inst) = 0;
 };

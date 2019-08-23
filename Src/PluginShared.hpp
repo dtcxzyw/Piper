@@ -17,8 +17,21 @@ namespace fs = std::experimental::filesystem;
 class JsonHelperAPI;
 using JsonHelper=std::shared_ptr<JsonHelperAPI>;
 
+struct SRT final {
+    Vec3 scale;
+    Quaternion rotate;
+    Vec3 trans;
+    Mat4 getPointTrans() const {
+        float mat[16];
+        rotate.toMatrix(mat);
+        return Mat4::translate(trans) * Mat4(mat) * Mat4::scale(scale);
+    }
+};
+
 class JsonHelperAPI {
 public:
+    virtual bool getBool(const std::string &attr, bool def) = 0;
+    virtual SRT getTransform(const std::string &attr) = 0;
     virtual std::string getString(const std::string &attr, const std::string &def) = 0;
     virtual float getFloat(const std::string &attr, float def) = 0;
     virtual Vec3 getVec3(const std::string &attr, const Vec3 &def) = 0;

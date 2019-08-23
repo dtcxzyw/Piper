@@ -9,7 +9,6 @@
 #include <lz4hc.h>
 #pragma warning(pop)
 #include "../../Common.hpp"
-#include "DataDesc.hpp"
 #include "../../Shared.hpp"
 
 namespace fs = std::experimental::filesystem;
@@ -77,7 +76,6 @@ void cast(int argc, char **argv) {
         aiProcess_SortByPType |
         aiProcess_GenSmoothNormals |
         aiProcess_GenUVCoords |
-        aiProcess_CalcTangentSpace |
         aiProcess_FixInfacingNormals |
         aiProcess_ImproveCacheLocality);
     if (!scene ||
@@ -89,26 +87,29 @@ void cast(int argc, char **argv) {
     const auto mesh = scene->mMeshes[0];
     INFO << mesh->mNumVertices << " vertices,"
         << mesh->mNumFaces << " faces";
-    if (!mesh->mNormals)
-        FATAL << "No normals!!!";
     const aiVector3D *tangents = mesh->mTangents;
-    std::vector<aiVector3D> fakeT;
     std::vector<char> data{ 'm', 'e', 's', 'h' };
-    {
-        std::vector<Vertex> buf(mesh->mNumVertices);
-        auto uv = mesh->mTextureCoords[0];
-        for (auto i = 0U; i < mesh->mNumVertices; ++i) {
-            buf[i].pos = *reinterpret_cast<Vec3 *>(
-                mesh->mVertices + i);
-            buf[i].normal = *reinterpret_cast<Vec3 *>(
-                mesh->mNormals + i);
-            if (uv)
-                buf[i].texCoord =
-                *reinterpret_cast<Vec2 *>(uv + i);
-        }
-        const uint64_t vertSize = mesh->mNumVertices;
-        write(data, &vertSize);
-        write(data, buf.data(), buf.size());
+    uint32_t flag = 0;
+    if (mesh->HasNormals()) {
+        flag |= 1;
+        INFO << "Has normals.";
+    }
+    if (mesh->HasTextureCoords(0)) {
+        flag |= 2;
+        INFO << "Has texCoords.";
+    }
+    const uint64_t vertSize = mesh->mNumVertices;
+    write(data, &vertSize);
+    write(data, &flag);
+    write(data, mesh->mVertices, vertSize);
+    if (mesh->HasNormals())
+        write(data, mesh->mNormals, vertSize);
+    if (mesh->HasTextureCoords(0)) {
+        std::vector<aiVector2D> texCoords(vertSize);
+        aiVector3D *ptr = mesh->mTextureCoords[0];
+        for (uint64_t i = 0; i < vertSize; ++i)
+            texCoords[i] = aiVector2D(ptr[i].x, ptr[i].y);
+        write(data, texCoords.data(), vertSize);
     }
     {
         std::vector<uint3> buf(mesh->mNumFaces);
