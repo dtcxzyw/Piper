@@ -1,14 +1,13 @@
 #pragma once
 #include "Common.hpp"
 #pragma warning(push, 0)
-#include <Corrade/PluginManager/AbstractPlugin.h>
-#include <Corrade/PluginManager/AbstractManager.h>
 #include <optixu/optixpp_namespace.h>
 #include <nlohmann/json.hpp>
+#include "../Bus/BusCommon.hpp"
+using Bus::ReportLevel;
 #pragma warning(pop)
 #include <filesystem>
 #include <set>
-#include "Shared.hpp"
 
 using Json=nlohmann::json;
 namespace PM = Corrade::PluginManager;

@@ -85,24 +85,19 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="..\..\Src\Bus\BusSystem.cpp" />
     <ClCompile Include="..\..\Src\Piper\CameraAdapter.cpp" />
     <ClCompile Include="..\..\Src\Piper\main.cpp" />
-    <ClCompile Include="..\..\Src\Piper\ModuleLoader.cpp" />
     <ClCompile Include="..\..\Src\Piper\PluginShared.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\..\Src\Cameras\CameraAPI.hpp" />
-    <ClInclude Include="..\..\Src\Common.hpp" />
-    <ClInclude Include="..\..\Src\CUDA.hpp" />
     <ClInclude Include="..\..\Src\Drivers\DriverAPI.hpp" />
     <ClInclude Include="..\..\Src\Geometries\GeometryAPI.hpp" />
     <ClInclude Include="..\..\Src\Integrators\IntegratorAPI.hpp" />
     <ClInclude Include="..\..\Src\Lights\LightAPI.hpp" />
     <ClInclude Include="..\..\Src\Materials\MaterialAPI.hpp" />
     <ClInclude Include="..\..\Src\Piper\CameraAdapter.hpp" />
-    <ClInclude Include="..\..\Src\Piper\ModuleLoader.hpp" />
-    <ClInclude Include="..\..\Src\PluginShared.hpp" />
-    <ClInclude Include="..\..\Src\Shared.hpp" />
   </ItemGroup>
   <ItemGroup>
     <CustomBuild Include="..\..\Src\Piper\Default.cu">

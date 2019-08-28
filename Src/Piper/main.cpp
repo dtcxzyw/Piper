@@ -1,20 +1,21 @@
 #pragma warning(push, 0)
+#include "../Bus/BusSystem.hpp"
 #include <cxxopts.hpp>
 #include <nlohmann/json.hpp>
+#include <rang.hpp>
 #pragma warning(pop)
-#include <filesystem>
-#include <fstream>
+#include "../Drivers/DriverAPI.hpp"
+#include "../Geometries/GeometryAPI.hpp"
+#include "../Integrators/IntegratorAPI.hpp"
+#include "../Lights/LightAPI.hpp"
+#include "../Materials/MaterialAPI.hpp"
 #include "../PluginShared.hpp"
 #include "CameraAdapter.hpp"
-#include "../Materials/MaterialAPI.hpp"
-#include "../Lights/LightAPI.hpp"
-#include "../Drivers/DriverAPI.hpp"
-#include "../Integrators/IntegratorAPI.hpp"
-#include "../Geometries/GeometryAPI.hpp"
-#include <map>
 #include <any>
+#include <filesystem>
+#include <fstream>
+#include <map>
 #include <regex>
-#include "../Shared.hpp"
 
 namespace fs = std::experimental::filesystem;
 using Json = nlohmann::json;
@@ -22,7 +23,7 @@ using Json = nlohmann::json;
 optix::Context createContext(JsonHelper config) {
     int RTXMode = config->toBool("RTXMode");
     RTresult res = rtGlobalSetAttribute(RT_GLOBAL_ATTRIBUTE_ENABLE_RTX,
-        sizeof(int), &RTXMode);
+                                        sizeof(int), &RTXMode);
     optix::Context context = optix::Context::create();
     context->checkErrorNoGetContext(res);
     context->setExceptionEnabled(RT_EXCEPTION_ALL, true);
@@ -35,14 +36,13 @@ optix::Context createContext(JsonHelper config) {
     return context;
 }
 
-Json loadScene(const fs::path &path) {
+Json loadScene(const fs::path& path) {
     std::ifstream in(path);
     Json sceneData;
     try {
         in >> sceneData;
         return sceneData;
-    }
-    catch (const std::exception &ex) {
+    } catch(const std::exception& ex) {
         FATAL << "Failed to load scene file :" << ex.what();
     }
 }
@@ -52,9 +52,9 @@ using MaterialLib = std::map<std::string, Plugin<Material>>;
 MaterialLib loadMaterials(JsonHelper config, PluginHelper helper) {
     MaterialLib res;
     std::vector<JsonHelper> mats = config->expand();
-    for (auto cfg : mats) {
+    for(auto cfg : mats) {
         std::string name = cfg->toString("Name");
-        if (res.count(name))
+        if(res.count(name))
             FATAL << "Material \"" << name << "\" has been defined.";
         else {
             std::string plugin = cfg->toString("Plugin");
@@ -69,17 +69,19 @@ MaterialLib loadMaterials(JsonHelper config, PluginHelper helper) {
 using LightLib = std::map<std::string, LightProgram>;
 
 LightLib loadLights(JsonHelper config, PluginHelper helper,
-    std::vector<Plugin<Light>> &lig) {
+                    std::vector<Plugin<Light>>& lig) {
     LightLib res;
     std::vector<JsonHelper> lights = config->expand();
-    for (auto cfg : lights) {
+    for(auto cfg : lights) {
         std::string name = cfg->toString("Name");
-        if (res.count(name))
+        if(res.count(name))
             FATAL << "Light \"" << name << "\" has been defined.";
         else {
             std::string plugin = cfg->toString("Plugin");
             Plugin<Light> light(plugin);
-            res.emplace(name, light->init(helper, cfg, fs::path("Plugins/Lights") / plugin));
+            res.emplace(
+                name,
+                light->init(helper, cfg, fs::path("Plugins/Lights") / plugin));
             lig.emplace_back(light);
         }
     }
@@ -87,18 +89,20 @@ LightLib loadLights(JsonHelper config, PluginHelper helper,
 }
 
 Plugin<Integrator> loadIntegrator(JsonHelper config, PluginHelper helper,
-    const fs::path &ptx, optix::Program &prog) {
+                                  const fs::path& ptx, optix::Program& prog) {
     std::string plugin = config->toString("Plugin");
     Plugin<Integrator> inte(plugin);
-    prog = inte->init(helper, config, fs::path("Plugins/Integrators") / plugin, ptx);
+    prog = inte->init(helper, config, fs::path("Plugins/Integrators") / plugin,
+                      ptx);
     return inte;
 }
 
 Plugin<Driver> loadDriver(JsonHelper config, PluginHelper helper,
-    uint2 &filmSize) {
+                          uint2& filmSize) {
     std::string plugin = config->toString("Plugin");
     Plugin<Driver> driver(plugin);
-    filmSize = driver->init(helper, config, fs::path("Plugins/Drivers") / plugin);
+    filmSize =
+        driver->init(helper, config, fs::path("Plugins/Drivers") / plugin);
     return driver;
 }
 
@@ -107,9 +111,9 @@ using GeometryLib = std::map<std::string, Plugin<Geometry>>;
 GeometryLib loadGeometries(JsonHelper config, PluginHelper helper) {
     GeometryLib res;
     std::vector<JsonHelper> geos = config->expand();
-    for (auto cfg : geos) {
+    for(auto cfg : geos) {
         std::string name = cfg->toString("Name");
-        if (res.count(name))
+        if(res.count(name))
             FATAL << "Geometry \"" << name << "\" has been defined.";
         else {
             std::string plugin = cfg->toString("Plugin");
@@ -126,42 +130,46 @@ struct LightInfo final {
     LightProgram prog;
 };
 
-void parseNode(JsonHelper root, const MaterialLib &mat, const LightLib &light
-    , const GeometryLib &geo, std::vector<LightInfo> &lightInst,
-    std::vector<std::any> &content, optix::Group group, optix::Context context);
+void parseNode(JsonHelper root, const MaterialLib& mat, const LightLib& light,
+               const GeometryLib& geo, std::vector<LightInfo>& lightInst,
+               std::vector<std::any>& content, optix::Group group,
+               optix::Context context);
 
-void parseChildren(JsonHelper root, const MaterialLib &mat, const LightLib &light
-    , const GeometryLib &geo, std::vector<LightInfo> &lightInst,
-    std::vector<std::any> &content, optix::Group group, optix::Context context) {
+void parseChildren(JsonHelper root, const MaterialLib& mat,
+                   const LightLib& light, const GeometryLib& geo,
+                   std::vector<LightInfo>& lightInst,
+                   std::vector<std::any>& content, optix::Group group,
+                   optix::Context context) {
     std::vector<JsonHelper> children = root->expand();
-    for (auto child : children)
+    for(auto child : children)
         parseNode(child, mat, light, geo, lightInst, content, group, context);
 }
 
-template<typename T>
-T access(const std::map<std::string, T> &lib, const std::string &name) {
+template <typename T>
+T access(const std::map<std::string, T>& lib, const std::string& name) {
     auto iter = lib.find(name);
-    if (iter == lib.cend())
+    if(iter == lib.cend())
         FATAL << "No " << typeid(T).name() << " called \"" << name << "\".";
     return iter->second;
 }
 
-void parseNode(JsonHelper root, const MaterialLib &mat, const LightLib &light
-    , const GeometryLib &geo, std::vector<LightInfo> &lightInst,
-    std::vector<std::any> &content, optix::Group group, optix::Context context) {
+void parseNode(JsonHelper root, const MaterialLib& mat, const LightLib& light,
+               const GeometryLib& geo, std::vector<LightInfo>& lightInst,
+               std::vector<std::any>& content, optix::Group group,
+               optix::Context context) {
     std::string type = root->toString("Type");
     std::string name = root->toString("Name");
-    if (type == "Light") {
+    if(type == "Light") {
         LightInfo info;
         info.trans = Mat4::identity();
         info.prog = access(light, name);
         lightInst.emplace_back(info);
-    }
-    else if (type == "Geometry") {
+    } else if(type == "Geometry") {
         optix::GeometryInstance inst = context->createGeometryInstance();
         access(geo, name)->setInstance(inst);
         inst->setMaterialCount(1);
-        inst->setMaterial(0, access(mat, root->toString("Material"))->getMaterial());
+        inst->setMaterial(
+            0, access(mat, root->toString("Material"))->getMaterial());
         inst->validate();
         content.emplace_back(inst);
         optix::GeometryGroup gg = context->createGeometryGroup();
@@ -173,40 +181,42 @@ void parseNode(JsonHelper root, const MaterialLib &mat, const LightLib &light
         context["globalTopNode"]->set(gg);
         content.emplace_back(gg);
         content.emplace_back(acc);
-    }
-    else FATAL << "Unrecognized type \"" << type << "\".";
+    } else
+        FATAL << "Unrecognized type \"" << type << "\".";
 }
 
-void renderImpl(JsonHelper config, const fs::path &scenePath) {
+void renderImpl(JsonHelper config, const fs::path& scenePath) {
     JsonHelper global = config->attribute("Global");
     optix::Context context = createContext(global);
     std::string runtimeLib = global->toString("RuntimeLib");
-    PluginHelper helper = buildPluginHelper(context, fs::current_path() / "Libs" /
-        runtimeLib, scenePath);
+    PluginHelper helper = buildPluginHelper(
+        context, fs::current_path() / "Libs" / runtimeLib, scenePath);
     INFO << "Loading camera";
     CameraAdapter camera(config->attribute("Camera"), helper);
     INFO << "Loading materials";
-    MaterialLib materials = loadMaterials(config->attribute("MaterialLib"), helper);
+    MaterialLib materials =
+        loadMaterials(config->attribute("MaterialLib"), helper);
     INFO << "Loading lights";
     std::vector<Plugin<Light>> lig;
     LightLib lights = loadLights(config->attribute("LightLib"), helper, lig);
-    INFO<<"Configurating lights";
+    INFO << "Configurating lights";
     std::vector<int> progs;
-    for (auto light : lights)
+    for(auto light : lights)
         progs.push_back(light.second.prog);
-    for (auto mat : materials) {
-        optix::Program prog = mat.second->getMaterial()->getClosestHitProgram(radianceRayType);
+    for(auto mat : materials) {
+        optix::Program prog =
+            mat.second->getMaterial()->getClosestHitProgram(radianceRayType);
         prog->setCallsitePotentialCallees("call_in_sampleOneLight", progs);
     }
     INFO << "Loading integrator";
     optix::Program inteProg;
-    Plugin<Integrator> integrator = loadIntegrator(config->attribute("Integrator"),
-        helper, camera.getPTX(), inteProg);
+    Plugin<Integrator> integrator = loadIntegrator(
+        config->attribute("Integrator"), helper, camera.getPTX(), inteProg);
     context->setRayGenerationProgram(0, inteProg);
     INFO << "Loading driver";
     uint2 filmSize;
-    Plugin<Driver> driver = loadDriver(config->attribute("Driver"), helper,
-        filmSize);
+    Plugin<Driver> driver =
+        loadDriver(config->attribute("Driver"), helper, filmSize);
     camera.prepare(inteProg, filmSize);
     INFO << "Loading geometries";
     GeometryLib geos = loadGeometries(config->attribute("GeometryLib"), helper);
@@ -219,23 +229,23 @@ void renderImpl(JsonHelper config, const fs::path &scenePath) {
     group->setVisibilityMask(255);
     group->validate();
     context["globalTopNode"]->set(group);
-    parseChildren(config->attribute("Scene"), materials, lights, geos, lightInst,
-        content, group, context);
-    optix::Buffer lightMat = context->createBuffer(RT_BUFFER_INPUT,
-        RT_FORMAT_USER, lightInst.size());
+    parseChildren(config->attribute("Scene"), materials, lights, geos,
+                  lightInst, content, group, context);
+    optix::Buffer lightMat = context->createBuffer(
+        RT_BUFFER_INPUT, RT_FORMAT_USER, lightInst.size());
     {
         lightMat->setElementSize(sizeof(Mat4));
         BufferMapGuard guard(lightMat, RT_BUFFER_MAP_WRITE_DISCARD);
-        for (size_t i = 0; i < lightInst.size(); ++i)
+        for(size_t i = 0; i < lightInst.size(); ++i)
             guard.as<Mat4>()[i] = lightInst[i].trans;
     }
     context["lightMatrices"]->set(lightMat);
-    optix::Buffer lightProg = context->createBuffer(RT_BUFFER_INPUT,
-        RT_FORMAT_USER, lightInst.size());
+    optix::Buffer lightProg = context->createBuffer(
+        RT_BUFFER_INPUT, RT_FORMAT_USER, lightInst.size());
     {
         lightProg->setElementSize(sizeof(LightProgram));
         BufferMapGuard guard(lightProg, RT_BUFFER_MAP_WRITE_DISCARD);
-        for (size_t i = 0; i < lightInst.size(); ++i)
+        for(size_t i = 0; i < lightInst.size(); ++i)
             guard.as<LightProgram>()[i] = lightInst[i].prog;
     }
     context["lightPrograms"]->set(lightProg);
@@ -243,61 +253,60 @@ void renderImpl(JsonHelper config, const fs::path &scenePath) {
     driver->doRender();
 }
 
-bool render(const fs::path &in) {
-    if (fs::exists(in)) {
+bool render(const fs::path& in) {
+    if(fs::exists(in)) {
         Json scene = loadScene(in);
         try {
             renderImpl(buildJsonHelper(scene), in.parent_path());
             return true;
-        }
-        catch (const optix::Exception &ex) {
-            FATAL << "Optix Exception[" << ex.getErrorCode() << "]" <<
-                ex.getErrorString();
-        }
-        catch (const std::exception &ex) {
+        } catch(const optix::Exception& ex) {
+            FATAL << "Optix Exception[" << ex.getErrorCode() << "]"
+                  << ex.getErrorString();
+        } catch(const std::exception& ex) {
             FATAL << "Exception:" << ex.what();
         }
     }
-    ERROR << (in.empty() ?
-        "Please specify a scene file." :
-        "Invalid scene file name.");
+    ERROR << (in.empty() ? "Please specify a scene file." :
+                           "Invalid scene file name.");
     return false;
 }
 
-template<typename T>
-void callCommand(const std::string &plugin, int argc, char **argv) {
+template <typename T>
+void callCommand(const std::string& plugin, int argc, char** argv) {
     try {
         Plugin<T> plu(plugin);
         plu->command(argc, argv);
-    }
-    catch (const std::exception &ex) {
+    } catch(const std::exception& ex) {
         FATAL << ex.what();
     }
 }
 
-int main(int argc, char **argv) {
+void mainImpl(int argc, char** argv, Bus::ModuleSystem& sys) {
     std::vector<std::string> input;
-    for (int i = 0; i < argc; ++i)
+    for(int i = 0; i < argc; ++i)
         input.emplace_back(argv[i]);
-    std::vector<char *> ref;
-    for (int i = 0; i < argc; ++i)
+    std::vector<char*> ref;
+    for(int i = 0; i < argc; ++i)
         ref.emplace_back(input[i].data());
     cxxopts::Options opt("Piper", "Piper::Main");
     opt.allow_unrecognised_options().add_options()(
         "i,input", "scene desc path",
-        cxxopts::value<fs::path>()->default_value(
-        "testScene.json"))
-        ("t,tool", "plugin built-in tools(Type::PluginName)", cxxopts::value<std::string>());
+        cxxopts::value<fs::path>()->default_value("testScene.json"))(
+        "t,tool", "plugin built-in tools(Type::PluginName)",
+        cxxopts::value<std::string>());
     try {
         auto optRes = opt.parse(argc, argv);
-        if (optRes.count("tool")) {
+        if(optRes.count("tool")) {
             std::string desc = optRes["tool"].as<std::string>();
-            std::regex pat("(Camera|Driver|Geometry|Integrator|Light|Material)::(\\w+)");
+            std::regex pat(
+                "(Camera|Driver|Geometry|Integrator|Light|Material)::(\\w+)");
             std::smatch mat;
             bool res = std::regex_match(desc, mat, pat);
             res &= mat.size() == 3;
-            if (res) {
-#define TEST(T) if(mat[1]==#T) callCommand<T>(mat[2],static_cast<int>(ref.size()),ref.data());
+            if(res) {
+#define TEST(T)      \
+    if(mat[1] == #T) \
+        callCommand<T>(mat[2], static_cast<int>(ref.size()), ref.data());
                 TEST(Camera);
                 TEST(Driver);
                 TEST(Geometry);
@@ -305,17 +314,73 @@ int main(int argc, char **argv) {
                 TEST(Light);
                 TEST(Material);
 #undef TEST
-            }
-            else FATAL << "Unrecognized tool \"" << desc << "\".";
-        }
-        else {
+            } else
+                FATAL << "Unrecognized tool \"" << desc << "\".";
+        } else {
             auto scene = optRes["input"].as<fs::path>();
-            if (!render(scene))
+            if(!render(scene))
                 std::cout << opt.help() << std::endl;
         }
-    }
-    catch (const std::exception &ex) {
+    } catch(const std::exception& ex) {
         FATAL << ex.what();
+    }
+}
+
+Bus::ReportFunction colorOutput(std::ostream& out, rang::fg col,
+                                const char* pre) {
+    return [&](Bus::ReportLevel, const std::string& message,
+               const Bus::SourceLocation& srcLoc) {
+        out << col << pre << ':' << message << std::endl;
+        out << "module:" << srcLoc.module << std::endl;
+        out << "function:" << srcLoc.functionName << std::endl;
+        out << "location:" << srcLoc.srcFile << " line " << srcLoc.line
+            << std::endl;
+        out << rang::fg::reset;
+    };
+}
+
+void processException(std::exception_ptr ex, const std::string& lastModule) {
+    try {
+        std::rethrow_exception(ex);
+    } catch(const Bus::SourceLocation& src) {
+        if(lastModule != src.module)
+            std::cerr << "in module " << src.module;
+        std::cerr << src.functionName << " at " << src.srcFile << " line "
+                  << src.line << std::endl;
+        try {
+            std::rethrow_if_nested(src);
+        } catch(...) {
+            processException(std::current_exception(), src.module);
+        }
+    } catch(const std::exception& exc) {
+        std::cerr << exc.what() << std::endl;
+        try {
+            std::rethrow_if_nested(exc);
+        } catch(...) {
+            processException(std::current_exception(), "");
+        }
+    } catch(...) {
+        std::cerr << "Unknown Error" << std::endl;
+    }
+}
+
+int main(int argc, char** argv) {
+    auto reporter = std::make_shared<Bus::Reporter>();
+    reporter->addAction(ReportLevel::Debug,
+                        colorOutput(std::cerr, rang::fg::yellow, "Debug"));
+    reporter->addAction(ReportLevel::Error,
+                        colorOutput(std::cerr, rang::fg::red, "Error"));
+    reporter->addAction(ReportLevel::Info,
+                        colorOutput(std::cerr, rang::fg::reset, "Info"));
+    reporter->addAction(ReportLevel::Warning,
+                        colorOutput(std::cerr, rang::fg::yellow, "Warning"));
+    try {
+        Bus::ModuleSystem sys(reporter);
+        mainImpl(argc, argv, sys);
+    } catch(...) {
+        std::cerr << rang::fg::red << "Exception:" << std::endl;
+        processException(std::current_exception(), "");
+        std::cerr << rang::fg::reset;
     }
     return 0;
 }

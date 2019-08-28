@@ -2,16 +2,15 @@
 <Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup>
     <ClCompile Include="..\..\Src\Piper\main.cpp" />
-    <ClCompile Include="..\..\Src\Piper\ModuleLoader.cpp" />
     <ClCompile Include="..\..\Src\Piper\PluginShared.cpp">
       <Filter>Shared</Filter>
     </ClCompile>
     <ClCompile Include="..\..\Src\Piper\CameraAdapter.cpp">
       <Filter>Adapters</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\Src\Bus\BusSystem.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="..\..\Src\Piper\ModuleLoader.hpp" />
     <ClInclude Include="..\..\Src\Cameras\CameraAPI.hpp">
       <Filter>API</Filter>
     </ClInclude>
@@ -26,18 +25,6 @@
     </ClInclude>
     <ClInclude Include="..\..\Src\Integrators\IntegratorAPI.hpp">
       <Filter>API</Filter>
-    </ClInclude>
-    <ClInclude Include="..\..\Src\Common.hpp">
-      <Filter>Shared</Filter>
-    </ClInclude>
-    <ClInclude Include="..\..\Src\CUDA.hpp">
-      <Filter>Shared</Filter>
-    </ClInclude>
-    <ClInclude Include="..\..\Src\Shared.hpp">
-      <Filter>Shared</Filter>
-    </ClInclude>
-    <ClInclude Include="..\..\Src\PluginShared.hpp">
-      <Filter>Shared</Filter>
     </ClInclude>
     <ClInclude Include="..\..\Src\Piper\CameraAdapter.hpp">
       <Filter>Adapters</Filter>
