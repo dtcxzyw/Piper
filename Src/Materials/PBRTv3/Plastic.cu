@@ -1,4 +1,4 @@
-#include "../../CUDA.hpp"
+#include "../../Shared/KernelShared.hpp"
 #include "BxDF.hpp"
 
 rtDeclareVariable(Payload, payload, rtPayload, );
@@ -19,15 +19,15 @@ RT_PROGRAM void closestHit() {
     Vec2 u = make_float2(sample2(seed), sample3(seed));
     Vec3 wi = choice ? lr.sampleF(ss.wo, u) : mr.sampleF(ss.wo, u);
     float fpdf = 0.5f * (lr.pdf(ss.wo, wi) + mr.pdf(ss.wo, wi));
-    if (fpdf >= eps)
+    if(fpdf >= eps)
         payload.f = (lr.f(ss.wo, wi) + mr.f(ss.wo, wi)) *
-        (fabsf(dot(wi, ss.base.m_normal)) / fpdf);
+            (fabsf(dot(wi, ss.base.m_normal)) / fpdf);
     payload.wi = wi;
     ss.base.inverse_transform(payload.wi);
     LightSample ls = sampleOneLight(payload.ori, sample4(seed));
     wi = ss.toLocal(ls.wi);
     float lpdf = 0.5f * (lr.pdf(ss.wo, wi) + mr.pdf(ss.wo, wi));
-    if (lpdf >= eps)
+    if(lpdf >= eps)
         payload.rad = ls.rad * (lr.f(ss.wo, wi) + mr.f(ss.wo, wi)) *
-        (fabsf(dot(wi, ss.base.m_normal)) / lpdf);
+            (fabsf(dot(wi, ss.base.m_normal)) / lpdf);
 }

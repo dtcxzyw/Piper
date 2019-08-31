@@ -8,35 +8,49 @@
     <ClCompile Include="..\..\Src\Piper\CameraAdapter.cpp">
       <Filter>Adapters</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\Src\Bus\BusSystem.cpp" />
+    <ClCompile Include="..\..\Src\Piper\JsonConfig.cpp" />
+    <ClCompile Include="..\..\Src\Piper\Renderer.cpp" />
+    <ClCompile Include="..\..\Src\ThirdParty\Bus\BusImpl.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="..\..\Src\Cameras\CameraAPI.hpp">
-      <Filter>API</Filter>
-    </ClInclude>
-    <ClInclude Include="..\..\Src\Materials\MaterialAPI.hpp">
-      <Filter>API</Filter>
-    </ClInclude>
-    <ClInclude Include="..\..\Src\Drivers\DriverAPI.hpp">
-      <Filter>API</Filter>
-    </ClInclude>
-    <ClInclude Include="..\..\Src\Lights\LightAPI.hpp">
-      <Filter>API</Filter>
-    </ClInclude>
-    <ClInclude Include="..\..\Src\Integrators\IntegratorAPI.hpp">
-      <Filter>API</Filter>
-    </ClInclude>
     <ClInclude Include="..\..\Src\Piper\CameraAdapter.hpp">
       <Filter>Adapters</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\Src\Geometries\GeometryAPI.hpp">
-      <Filter>API</Filter>
+    <ClInclude Include="..\..\Src\Shared\CameraAPI.hpp">
+      <Filter>Shared</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\Src\Shared\DriverAPI.hpp">
+      <Filter>Shared</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\Src\Shared\GeometryAPI.hpp">
+      <Filter>Shared</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\Src\Shared\IntegratorAPI.hpp">
+      <Filter>Shared</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\Src\Shared\KernelShared.hpp">
+      <Filter>Shared</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\Src\Shared\LightAPI.hpp">
+      <Filter>Shared</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\Src\Shared\MaterialAPI.hpp">
+      <Filter>Shared</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\Src\Shared\PluginShared.hpp">
+      <Filter>Shared</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\Src\Shared\Shared.hpp">
+      <Filter>Shared</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\Src\Shared\ConfigAPI.hpp">
+      <Filter>Shared</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\Src\Shared\CommandAPI.hpp">
+      <Filter>Shared</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
-    <Filter Include="API">
-      <UniqueIdentifier>{1399b6e0-1bb8-4337-b1ed-1902274a1bb3}</UniqueIdentifier>
-    </Filter>
     <Filter Include="Shared">
       <UniqueIdentifier>{c22b50c1-dca6-4552-9151-6b41c82effb1}</UniqueIdentifier>
     </Filter>

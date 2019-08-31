@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup Label="ProjectConfigurations">
     <ProjectConfiguration Include="Debug|x64">
@@ -33,8 +33,7 @@
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
   <ImportGroup Label="ExtensionSettings">
   </ImportGroup>
-  <ImportGroup Label="Shared">
-  </ImportGroup>
+  <ImportGroup Label="Shared" />
   <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
   </ImportGroup>
@@ -85,19 +84,26 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="..\..\Src\Bus\BusSystem.cpp" />
     <ClCompile Include="..\..\Src\Piper\CameraAdapter.cpp" />
+    <ClCompile Include="..\..\Src\Piper\JsonConfig.cpp" />
     <ClCompile Include="..\..\Src\Piper\main.cpp" />
     <ClCompile Include="..\..\Src\Piper\PluginShared.cpp" />
+    <ClCompile Include="..\..\Src\Piper\Renderer.cpp" />
+    <ClCompile Include="..\..\Src\ThirdParty\Bus\BusImpl.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="..\..\Src\Cameras\CameraAPI.hpp" />
-    <ClInclude Include="..\..\Src\Drivers\DriverAPI.hpp" />
-    <ClInclude Include="..\..\Src\Geometries\GeometryAPI.hpp" />
-    <ClInclude Include="..\..\Src\Integrators\IntegratorAPI.hpp" />
-    <ClInclude Include="..\..\Src\Lights\LightAPI.hpp" />
-    <ClInclude Include="..\..\Src\Materials\MaterialAPI.hpp" />
     <ClInclude Include="..\..\Src\Piper\CameraAdapter.hpp" />
+    <ClInclude Include="..\..\Src\Shared\CameraAPI.hpp" />
+    <ClInclude Include="..\..\Src\Shared\CommandAPI.hpp" />
+    <ClInclude Include="..\..\Src\Shared\ConfigAPI.hpp" />
+    <ClInclude Include="..\..\Src\Shared\DriverAPI.hpp" />
+    <ClInclude Include="..\..\Src\Shared\GeometryAPI.hpp" />
+    <ClInclude Include="..\..\Src\Shared\IntegratorAPI.hpp" />
+    <ClInclude Include="..\..\Src\Shared\KernelShared.hpp" />
+    <ClInclude Include="..\..\Src\Shared\LightAPI.hpp" />
+    <ClInclude Include="..\..\Src\Shared\MaterialAPI.hpp" />
+    <ClInclude Include="..\..\Src\Shared\PluginShared.hpp" />
+    <ClInclude Include="..\..\Src\Shared\Shared.hpp" />
   </ItemGroup>
   <ItemGroup>
     <CustomBuild Include="..\..\Src\Piper\Default.cu">

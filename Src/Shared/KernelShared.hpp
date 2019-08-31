@@ -1,5 +1,5 @@
 #pragma once
-#include "Common.hpp"
+#include "Shared.hpp"
 #pragma warning(push,0)
 #define RT_USE_TEMPLATED_RTCALLABLEPROGRAM
 #include <optix_device.h>

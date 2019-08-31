@@ -45,12 +45,12 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <IncludePath>$(OPTIX_PATH)include;$(CUDA_PATH)\include;$(IncludePath)</IncludePath>
     <LibraryPath>$(OPTIX_PATH)lib64;$(LibraryPath)</LibraryPath>
-    <OutDir>$(SolutionDir)Bin\Plugins\Materials\</OutDir>
+    <OutDir>$(SolutionDir)Bin\Plugins\$(ProjectName)\</OutDir>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <IncludePath>$(OPTIX_PATH)include;$(CUDA_PATH)\include;$(IncludePath)</IncludePath>
     <LibraryPath>$(OPTIX_PATH)lib64;$(LibraryPath)</LibraryPath>
-    <OutDir>$(SolutionDir)Bin\Plugins\Materials\</OutDir>
+    <OutDir>$(SolutionDir)Bin\Plugins\$(ProjectName)\</OutDir>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <ClCompile>
@@ -90,13 +90,13 @@
   <ItemGroup>
     <CustomBuild Include="..\..\..\Src\Materials\PBRTv3\Plastic.cu">
       <FileType>Document</FileType>
-      <Command Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">nvcc %(FullPath) -o $(TargetDir)$(ProjectName)\%(Filename).ptx  -I "$(CUDA_PATH)\include;$(OPTIX_PATH)include" -cudart=none -ptx -O2 -m64 -arch=sm_50 -use_fast_math -w</Command>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">nvcc %(FullPath) -o $(TargetDir)%(Filename).ptx  -I "$(CUDA_PATH)\include;$(OPTIX_PATH)include" -cudart=none -ptx -O2 -m64 -arch=sm_50 -use_fast_math -w</Command>
       <Message Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">build %(Filename) PTX</Message>
-      <Command Condition="'$(Configuration)|$(Platform)'=='Release|x64'">nvcc %(FullPath) -o $(TargetDir)$(ProjectName)\%(Filename).ptx  -I "$(CUDA_PATH)\include;$(OPTIX_PATH)include" -cudart=none -ptx -O2 -m64 -arch=sm_50 -use_fast_math -w</Command>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Release|x64'">nvcc %(FullPath) -o $(TargetDir)%(Filename).ptx  -I "$(CUDA_PATH)\include;$(OPTIX_PATH)include" -cudart=none -ptx -O2 -m64 -arch=sm_50 -use_fast_math -w</Command>
       <Message Condition="'$(Configuration)|$(Platform)'=='Release|x64'">build %(Filename) PTX</Message>
-      <Outputs Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">$(TargetDir)$(ProjectName)\%(Filename).ptx;%(Outputs)</Outputs>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">$(TargetDir)%(Filename).ptx;%(Outputs)</Outputs>
       <BuildInParallel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</BuildInParallel>
-      <Outputs Condition="'$(Configuration)|$(Platform)'=='Release|x64'">$(TargetDir)$(ProjectName)\%(Filename).ptx;%(Outputs)</Outputs>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='Release|x64'">$(TargetDir)%(Filename).ptx;%(Outputs)</Outputs>
       <BuildInParallel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</BuildInParallel>
       <LinkObjects Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">false</LinkObjects>
       <LinkObjects Condition="'$(Configuration)|$(Platform)'=='Release|x64'">false</LinkObjects>
@@ -107,13 +107,13 @@
     <ClInclude Include="..\..\..\Src\Materials\PBRTv3\Fresnel.hpp" />
     <CustomBuild Include="..\..\..\Src\Materials\PBRTv3\Microfact.cu">
       <FileType>Document</FileType>
-      <Command Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">nvcc %(FullPath) -o $(TargetDir)$(ProjectName)\%(Filename).ptx  -I "$(CUDA_PATH)\include;$(OPTIX_PATH)include" -cudart=none -ptx -O2 -m64 -arch=sm_50 -use_fast_math -w -rdc=true</Command>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">nvcc %(FullPath) -o $(TargetDir)%(Filename).ptx  -I "$(CUDA_PATH)\include;$(OPTIX_PATH)include" -cudart=none -ptx -O2 -m64 -arch=sm_50 -use_fast_math -w -rdc=true</Command>
       <Message Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">build %(Filename) PTX</Message>
-      <Outputs Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">$(TargetDir)$(ProjectName)\%(Filename).ptx;%(Outputs)</Outputs>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">$(TargetDir)%(Filename).ptx;%(Outputs)</Outputs>
       <BuildInParallel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</BuildInParallel>
-      <Command Condition="'$(Configuration)|$(Platform)'=='Release|x64'">nvcc %(FullPath) -o $(TargetDir)$(ProjectName)\%(Filename).ptx  -I "$(CUDA_PATH)\include;$(OPTIX_PATH)include" -cudart=none -ptx -O2 -m64 -arch=sm_50 -use_fast_math -w -rdc=true</Command>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Release|x64'">nvcc %(FullPath) -o $(TargetDir)%(Filename).ptx  -I "$(CUDA_PATH)\include;$(OPTIX_PATH)include" -cudart=none -ptx -O2 -m64 -arch=sm_50 -use_fast_math -w -rdc=true</Command>
       <Message Condition="'$(Configuration)|$(Platform)'=='Release|x64'">build %(Filename) PTX</Message>
-      <Outputs Condition="'$(Configuration)|$(Platform)'=='Release|x64'">$(TargetDir)$(ProjectName)\%(Filename).ptx;%(Outputs)</Outputs>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='Release|x64'">$(TargetDir)%(Filename).ptx;%(Outputs)</Outputs>
       <BuildInParallel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</BuildInParallel>
       <LinkObjects Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">false</LinkObjects>
       <LinkObjects Condition="'$(Configuration)|$(Platform)'=='Release|x64'">false</LinkObjects>
@@ -125,12 +125,12 @@
       <FileType>Document</FileType>
       <Message Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">build %(Filename) PTX</Message>
       <Message Condition="'$(Configuration)|$(Platform)'=='Release|x64'">build %(Filename) PTX</Message>
-      <Command Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">nvcc %(FullPath) -o $(TargetDir)$(ProjectName)\%(Filename).ptx  -I "$(CUDA_PATH)\include;$(OPTIX_PATH)include" -cudart=none -ptx -O2 -m64 -arch=sm_50 -use_fast_math -w -rdc=true</Command>
-      <Outputs Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">$(TargetDir)$(ProjectName)\%(Filename).ptx</Outputs>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">nvcc %(FullPath) -o $(TargetDir)%(Filename).ptx  -I "$(CUDA_PATH)\include;$(OPTIX_PATH)include" -cudart=none -ptx -O2 -m64 -arch=sm_50 -use_fast_math -w -rdc=true</Command>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">$(TargetDir)%(Filename).ptx</Outputs>
       <LinkObjects Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">false</LinkObjects>
       <BuildInParallel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</BuildInParallel>
-      <Command Condition="'$(Configuration)|$(Platform)'=='Release|x64'">nvcc %(FullPath) -o $(TargetDir)$(ProjectName)\%(Filename).ptx  -I "$(CUDA_PATH)\include;$(OPTIX_PATH)include" -cudart=none -ptx -O2 -m64 -arch=sm_50 -use_fast_math -w -rdc=true</Command>
-      <Outputs Condition="'$(Configuration)|$(Platform)'=='Release|x64'">$(TargetDir)$(ProjectName)\%(Filename).ptx</Outputs>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Release|x64'">nvcc %(FullPath) -o $(TargetDir)%(Filename).ptx  -I "$(CUDA_PATH)\include;$(OPTIX_PATH)include" -cudart=none -ptx -O2 -m64 -arch=sm_50 -use_fast_math -w -rdc=true</Command>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='Release|x64'">$(TargetDir)%(Filename).ptx</Outputs>
       <LinkObjects Condition="'$(Configuration)|$(Platform)'=='Release|x64'">false</LinkObjects>
       <BuildInParallel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</BuildInParallel>
       <AdditionalInputs Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">%(AdditionalInputs)</AdditionalInputs>
@@ -138,13 +138,13 @@
     </CustomBuild>
     <CustomBuild Include="..\..\..\Src\Materials\PBRTv3\Fresnel.cu">
       <FileType>Document</FileType>
-      <Command Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">nvcc %(FullPath) -o $(TargetDir)$(ProjectName)\%(Filename).ptx  -I "$(CUDA_PATH)\include;$(OPTIX_PATH)include" -cudart=none -ptx -O2 -m64 -arch=sm_50 -use_fast_math -w -rdc=true</Command>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">nvcc %(FullPath) -o $(TargetDir)%(Filename).ptx  -I "$(CUDA_PATH)\include;$(OPTIX_PATH)include" -cudart=none -ptx -O2 -m64 -arch=sm_50 -use_fast_math -w -rdc=true</Command>
       <Message Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">build %(Filename) PTX</Message>
-      <Outputs Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">$(TargetDir)$(ProjectName)\%(Filename).ptx;%(Outputs)</Outputs>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">$(TargetDir)%(Filename).ptx;%(Outputs)</Outputs>
       <BuildInParallel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</BuildInParallel>
-      <Command Condition="'$(Configuration)|$(Platform)'=='Release|x64'">nvcc %(FullPath) -o $(TargetDir)$(ProjectName)\%(Filename).ptx  -I "$(CUDA_PATH)\include;$(OPTIX_PATH)include" -cudart=none -ptx -O2 -m64 -arch=sm_50 -use_fast_math -w -rdc=true</Command>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Release|x64'">nvcc %(FullPath) -o $(TargetDir)%(Filename).ptx  -I "$(CUDA_PATH)\include;$(OPTIX_PATH)include" -cudart=none -ptx -O2 -m64 -arch=sm_50 -use_fast_math -w -rdc=true</Command>
       <Message Condition="'$(Configuration)|$(Platform)'=='Release|x64'">build %(Filename) PTX</Message>
-      <Outputs Condition="'$(Configuration)|$(Platform)'=='Release|x64'">$(TargetDir)$(ProjectName)\%(Filename).ptx;%(Outputs)</Outputs>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='Release|x64'">$(TargetDir)%(Filename).ptx;%(Outputs)</Outputs>
       <BuildInParallel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</BuildInParallel>
       <LinkObjects Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">false</LinkObjects>
       <LinkObjects Condition="'$(Configuration)|$(Platform)'=='Release|x64'">false</LinkObjects>

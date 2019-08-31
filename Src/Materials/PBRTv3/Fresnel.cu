@@ -1,14 +1,14 @@
 #include "Fresnel.hpp"
 DEVICE Spectrum FresnelDielectric::eval(float cosThetaI) const {
     float etaI = mEtaI, etaT = mEtaT;
-    if (cosThetaI < 0.0f) {
+    if(cosThetaI < 0.0f) {
         cosThetaI = -cosThetaI;
         swap(etaI, etaT);
     }
     float sinThetaT = etaI / etaT * cos2Sin(cosThetaI);
 
-    //Total internal reflection
-    if (sinThetaT >= 1.0f)
+    // Total internal reflection
+    if(sinThetaT >= 1.0f)
         return make_float3(1.0f);
 
     float cosThetaT = sin2Cos(sinThetaT);

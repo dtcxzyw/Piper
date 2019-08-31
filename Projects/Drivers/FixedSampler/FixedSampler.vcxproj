@@ -33,8 +33,7 @@
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
   <ImportGroup Label="ExtensionSettings">
   </ImportGroup>
-  <ImportGroup Label="Shared">
-  </ImportGroup>
+  <ImportGroup Label="Shared" />
   <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
   </ImportGroup>
@@ -43,12 +42,12 @@
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
-    <OutDir>$(SolutionDir)Bin\Plugins\Drivers\</OutDir>
+    <OutDir>$(SolutionDir)Bin\Plugins\$(ProjectName)\</OutDir>
     <IncludePath>$(CUDA_PATH)\include;$(OPTIX_PATH)include;$(IncludePath)</IncludePath>
     <LibraryPath>$(OPTIX_PATH)lib64;$(LibraryPath)</LibraryPath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
-    <OutDir>$(SolutionDir)Bin\Plugins\Drivers\</OutDir>
+    <OutDir>$(SolutionDir)Bin\Plugins\$(ProjectName)\</OutDir>
     <IncludePath>$(CUDA_PATH)\include;$(OPTIX_PATH)include;$(IncludePath)</IncludePath>
     <LibraryPath>$(OPTIX_PATH)lib64;$(LibraryPath)</LibraryPath>
   </PropertyGroup>
@@ -86,6 +85,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="..\..\..\Src\Drivers\FixedSampler\main.cpp" />
+    <ClCompile Include="..\..\..\Src\ThirdParty\Bus\BusImpl.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

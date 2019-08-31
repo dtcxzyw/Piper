@@ -4,6 +4,7 @@
     <ClCompile Include="..\..\..\Src\Geometries\TriMesh\main.cpp" />
     <ClCompile Include="..\..\..\Src\Geometries\TriMesh\MeshConverter.cpp" />
     <ClCompile Include="..\..\..\Src\Geometries\TriMesh\MeshLoader.cpp" />
+    <ClCompile Include="..\..\..\Src\ThirdParty\Bus\BusImpl.cpp" />
   </ItemGroup>
   <ItemGroup>
     <CustomBuild Include="..\..\..\Src\Geometries\TriMesh\Triangle.cu" />

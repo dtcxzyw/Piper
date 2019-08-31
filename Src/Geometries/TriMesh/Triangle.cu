@@ -1,4 +1,4 @@
-#include "../../CUDA.hpp"
+#include "../../Shared/KernelShared.hpp"
 
 /*
  * Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.

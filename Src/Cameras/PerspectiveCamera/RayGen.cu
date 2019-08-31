@@ -1,4 +1,4 @@
-#include "../../CUDA.hpp"
+#include "../../Shared/KernelShared.hpp"
 
 rtDeclareVariable(float3, cameraBase, , );
 rtDeclareVariable(float3, cameraDown, , );

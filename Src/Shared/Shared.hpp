@@ -5,7 +5,6 @@
 #include <optixu/optixu_matrix.h>
 #include <optixu/optixu_quaternion_namespace.h>
 #include <optixu/optixu_aabb_namespace.h>
-#undef ERROR
 #pragma warning(pop)
 
 using Vec3 = float3;
@@ -33,4 +32,15 @@ enum class BxDFType {
     Diffuse = 8,
     Glossy = 16,
     All = 31
+};
+
+struct SRT final {
+    Vec3 scale;
+    Quaternion rotate;
+    Vec3 trans;
+    Mat4 getPointTrans() const {
+        float mat[16];
+        rotate.toMatrix(mat);
+        return Mat4::translate(trans) * Mat4(mat) * Mat4::scale(scale);
+    }
 };

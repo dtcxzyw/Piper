@@ -1,5 +1,5 @@
 #pragma once
-#include "../../Common.hpp"
+#include "../../Shared/Shared.hpp"
 
 struct DirLight final {
     Spectrum lum;
