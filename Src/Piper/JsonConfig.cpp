@@ -17,6 +17,12 @@ public:
     JsonConfig(Bus::ModuleInstance& instance, std::shared_ptr<Json> data,
                const Json* ref, const std::string& path)
         : Config(instance), mData(data), mRef(ref), mPath(path) {}
+    std::string dump() const override {
+        return mRef->dump();
+    }
+    std::string path() const override {
+        return mPath;
+    }
     bool load(const fs::path& path) override {
         try {
             mData = std::make_shared<Json>();

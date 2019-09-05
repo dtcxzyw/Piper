@@ -2,21 +2,21 @@
 #include "../Shared/ConfigAPI.hpp"
 #pragma warning(push, 0)
 #include "../ThirdParty/Bus/BusSystem.hpp"
-#include "../ThirdParty/Bus/BusImpl.cpp"
 #include <rang.hpp>
 #pragma warning(pop)
+#include <sstream>
 
 namespace fs = std::experimental::filesystem;
 
 int mainImpl(int argc, char** argv, Bus::ModuleSystem& sys) {
     BUS_TRACE_BEGIN("Piper.Main") {
         if(argc < 2)
-            BUS_TRACE_THROW(std::logic_error("Need Command Name"));
+            BUS_TRACE_THROW(std::invalid_argument("Need Command Name"));
         std::shared_ptr<Command> command =
             sys.instantiateByName<Command>(argv[1]);
         if(!command)
-            BUS_TRACE_THROW(
-                std::logic_error("No function called " + std::string(argv[1])));
+            BUS_TRACE_THROW(std::invalid_argument("No function called " +
+                                                  std::string(argv[1])));
         std::vector<char*> nargv{ argv[0] };
         for(int i = 2; i < argc; ++i)
             nargv.emplace_back(argv[i]);
@@ -30,38 +30,52 @@ Bus::ReportFunction colorOutput(std::ostream& out, rang::fg col,
                                 const char* pre) {
     return [&](Bus::ReportLevel, const std::string& message,
                const Bus::SourceLocation& srcLoc) {
+        if(pre == std::string("Error")) {
+            try {
+                throw std::runtime_error(message);
+            } catch(...) {
+                std::throw_with_nested(srcLoc);
+            }
+        }
         out << col << pre << ':' << message << std::endl;
         out << "module:" << srcLoc.module << std::endl;
         out << "function:" << srcLoc.functionName << std::endl;
         out << "location:" << srcLoc.srcFile << " line " << srcLoc.line
+            << std::endl
             << std::endl;
         out << rang::fg::reset;
     };
 }
 
-void processException(std::exception_ptr ex, const std::string& lastModule) {
+void processException(const std::exception& ex, const std::string& lastModule);
+void processException(const Bus::SourceLocation& ex,
+                      const std::string& lastModule);
+
+template <typename T>
+void nestedException(const T& exc, const std::string& lastModule) {
     try {
-        std::rethrow_exception(ex);
-    } catch(const Bus::SourceLocation& src) {
-        if(lastModule != src.module)
-            std::cerr << "in module " << src.module;
-        std::cerr << src.functionName << " at " << src.srcFile << " line "
-                  << src.line << std::endl;
-        try {
-            std::rethrow_if_nested(src);
-        } catch(...) {
-            processException(std::current_exception(), src.module);
-        }
-    } catch(const std::exception& exc) {
-        std::cerr << exc.what() << std::endl;
-        try {
-            std::rethrow_if_nested(exc);
-        } catch(...) {
-            processException(std::current_exception(), "");
-        }
+        std::rethrow_if_nested(exc);
+    } catch(const std::exception& ex) {
+        processException(ex, lastModule);
+    } catch(const Bus::SourceLocation& ex) {
+        processException(ex, lastModule);
     } catch(...) {
         std::cerr << "Unknown Error" << std::endl;
     }
+}
+
+void processException(const std::exception& ex, const std::string& lastModule) {
+    std::cerr << ex.what() << std::endl;
+    nestedException(ex, lastModule);
+}
+
+void processException(const Bus::SourceLocation& src,
+                      const std::string& lastModule) {
+    if(lastModule != src.module)
+        std::cerr << "in module " << src.module << std::endl;
+    std::cerr << src.functionName << " at " << src.srcFile << " line "
+              << src.line << std::endl;
+    nestedException(src, src.module);
 }
 
 std::shared_ptr<Bus::ModuleFunctionBase>
@@ -99,6 +113,44 @@ public:
     }
 };
 
+#define PROCEXC()                                                \
+    catch(const Bus::SourceLocation& ex) {                       \
+        std::cerr << rang::fg::red << "Exception:" << std::endl; \
+        processException(ex, "");                                \
+        std::cerr << rang::fg::reset;                            \
+    }                                                            \
+    catch(const std::exception& ex) {                            \
+        std::cerr << rang::fg::red << "Exception:" << std::endl; \
+        processException(ex, "");                                \
+        std::cerr << rang::fg::reset;                            \
+    }
+
+void loadPlugins(Bus::ModuleSystem& sys) {
+    for(auto p : fs::directory_iterator("Plugins")) {
+        if(p.status().type() == fs::file_type::directory) {
+            auto dir = p.path();
+            auto dll = dir / dir.filename().replace_extension(".dll");
+            if(fs::exists(dll)) {
+                try {
+                    sys.getReporter().apply(ReportLevel::Info,
+                                            "Loading module " + dir.filename().string(),
+                                            BUS_SRCLOC("Piper.Main"));
+                    sys.loadModuleFile(dll);
+                }
+                PROCEXC();
+            }
+        }
+    }
+    std::stringstream ss;
+    ss << "Loaded Module:" << std::endl;
+    for(auto mod : sys.listModules()) {
+        ss << mod.name << " " << mod.version << " " << Bus::GUID2Str(mod.guid)
+           << std::endl;
+    }
+    sys.getReporter().apply(ReportLevel::Info, ss.str(),
+                            BUS_SRCLOC("Piper.Main"));
+}
+
 int main(int argc, char** argv) {
     auto reporter = std::make_shared<Bus::Reporter>();
     reporter->addAction(ReportLevel::Debug,
@@ -111,15 +163,14 @@ int main(int argc, char** argv) {
                         colorOutput(std::cerr, rang::fg::yellow, "Warning"));
     try {
         Bus::ModuleSystem sys(reporter);
-        Bus::addModuleSearchPath("sharedDll", *reporter);
+        auto shared = fs::path(argv[0]).parent_path() / "SharedDll";
+        Bus::addModuleSearchPath(shared, *reporter);
         sys.wrapBuiltin([](Bus::ModuleSystem& sys) {
             return std::make_shared<BuiltinFunction>(sys);
         });
+        loadPlugins(sys);
         return mainImpl(argc, argv, sys);
-    } catch(...) {
-        std::cerr << rang::fg::red << "Exception:" << std::endl;
-        processException(std::current_exception(), "");
-        std::cerr << rang::fg::reset;
     }
+    PROCEXC();
     return EXIT_FAILURE;
 }

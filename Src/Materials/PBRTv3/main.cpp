@@ -1,5 +1,4 @@
 #include "../../Shared/MaterialAPI.hpp"
-#include "../../ThirdParty/Bus/BusImpl.cpp"
 
 class Plastic final : public Material {
 private:
@@ -10,6 +9,7 @@ private:
 public:
     explicit Plastic(Bus::ModuleInstance& instance) : Material(instance) {}
     void init(PluginHelper helper, std::shared_ptr<Config> config) override {
+        mMat = helper->getContext()->createMaterial();
         mHit = helper->compile(
             "closestHit",
             { "BxDF.ptx", "Fresnel.ptx", "Microfact.ptx", "Plastic.ptx" },

@@ -17,6 +17,8 @@ public:
     static Name getInterface() {
         return "Piper.Utilities.Config";
     }
+    virtual std::string dump() const = 0;
+    virtual std::string path() const = 0;
     virtual bool load(const fs::path& path) = 0;
     virtual std::shared_ptr<Config> attribute(Name attr) const = 0;
     virtual std::vector<std::shared_ptr<Config>> expand() const = 0;
