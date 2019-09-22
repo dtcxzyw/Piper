@@ -44,13 +44,13 @@
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <OutDir>$(SolutionDir)Bin\Plugins\$(ProjectName)\</OutDir>
-    <IncludePath>$(CUDA_PATH)\include;$(OPTIX_PATH)include;$(IncludePath)</IncludePath>
-    <LibraryPath>$(OPTIX_PATH)lib64;$(LibraryPath)</LibraryPath>
+    <IncludePath>$(CUDA_PATH)\include;$(OPTIX_PATH)\include;$(IncludePath)</IncludePath>
+    <LibraryPath>$(LibraryPath)</LibraryPath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <OutDir>$(SolutionDir)Bin\Plugins\$(ProjectName)\</OutDir>
-    <IncludePath>$(CUDA_PATH)\include;$(OPTIX_PATH)include;$(IncludePath)</IncludePath>
-    <LibraryPath>$(OPTIX_PATH)lib64;$(LibraryPath)</LibraryPath>
+    <IncludePath>$(CUDA_PATH)\include;$(OPTIX_PATH)\include;$(IncludePath)</IncludePath>
+    <LibraryPath>$(LibraryPath)</LibraryPath>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <ClCompile>
@@ -61,12 +61,13 @@
       <SDLCheck>true</SDLCheck>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp17</LanguageStandard>
+      <PreprocessorDefinitions>_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
-      <AdditionalDependencies>optix.6.0.0.lib;optixu.6.0.0.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
@@ -76,10 +77,11 @@
       <SDLCheck>true</SDLCheck>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp17</LanguageStandard>
+      <PreprocessorDefinitions>_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
-      <AdditionalDependencies>optix.6.0.0.lib;optixu.6.0.0.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
@@ -92,10 +94,10 @@
   <ItemGroup>
     <CustomBuild Include="..\..\..\Src\Lights\SimpleLight\DirLight.cu">
       <FileType>Document</FileType>
-      <Command Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">nvcc %(FullPath) -o $(TargetDir)%(Filename).ptx  -I "$(CUDA_PATH)\include";"$(OPTIX_PATH)include" -cudart=none -ptx -O2 -m64 -arch=sm_50 -use_fast_math -w -rdc=true</Command>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">nvcc %(FullPath) -o $(TargetDir)%(Filename).ptx  -I "$(CUDA_PATH)\include";"$(OPTIX_PATH)\include" -ptx -O2 -m64 -arch=sm_50 -use_fast_math -w -rdc=true </Command>
       <LinkObjects Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">false</LinkObjects>
       <BuildInParallel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</BuildInParallel>
-      <Command Condition="'$(Configuration)|$(Platform)'=='Release|x64'">nvcc %(FullPath) -o $(TargetDir)%(Filename).ptx  -I "$(CUDA_PATH)\include";"$(OPTIX_PATH)include" -cudart=none -ptx -O2 -m64 -arch=sm_50 -use_fast_math -w -rdc=true</Command>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Release|x64'">nvcc %(FullPath) -o $(TargetDir)%(Filename).ptx  -I "$(CUDA_PATH)\include";"$(OPTIX_PATH)\include" -ptx -O2 -m64 -arch=sm_50 -use_fast_math -w -rdc=true </Command>
       <LinkObjects Condition="'$(Configuration)|$(Platform)'=='Release|x64'">false</LinkObjects>
       <BuildInParallel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</BuildInParallel>
       <Message Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">build %(Filename) PTX</Message>

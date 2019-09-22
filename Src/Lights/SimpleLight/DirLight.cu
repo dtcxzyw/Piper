@@ -1,19 +1,17 @@
 #include "../../Shared/KernelShared.hpp"
 #include "DataDesc.hpp"
 
-rtDeclareVariable(rtObject, globalTopNode, , );
-
-RT_CALLABLE_PROGRAM LightSample sample(const Mat4&, rtBufferId<char, 1> buf,
-                                       const Vec3& pos) {
-    const DirLight* light = reinterpret_cast<DirLight*>(&buf[0]);
+DEVICE LightSample __continuation_callable__sample(
+    OptixTraversableHandle handle, const Vec3& pos, const Mat4&) {
+    const DirLight* light =
+        reinterpret_cast<DirLight*>(optixGetSbtDataPointer());
     Vec3 ori = pos - light->distance * light->direction;
-    optix::Ray ray = optix::make_Ray(ori, light->direction, shadowRayType, 0.0f,
-                                     light->distance - eps);
-    PayloadShadow shadow;
-    shadow.hit = false;
-    rtTrace(globalTopNode, ray, shadow, geometryMask);
+    unsigned hit = 0;
+    optixTrace(handle, v2f(ori), v2f(light->direction), eps, light->distance,
+               occlusionRay, OPTIX_RAY_FLAG_TERMINATE_ON_FIRST_HIT,
+               occlusionOffset, traceSBTStride, occlusionMiss, hit);
     LightSample res;
+    res.rad = (hit ? black : light->lum);
     res.wi = light->direction;
-    res.rad = (shadow.hit ? black : light->lum);
     return res;
 }

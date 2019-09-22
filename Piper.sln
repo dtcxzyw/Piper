@@ -29,6 +29,10 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Geometries", "Geometries", 
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "TriMesh", "Projects\Geometries\TriMesh\TriMesh.vcxproj", "{8262E060-E23E-4186-9E54-EE13A59F241C}"
 EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Samplers", "Samplers", "{D360A6FE-1B60-48B0-B062-1ED78278DFEF}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Halton", "Projects\Samplers\Halton\Halton.vcxproj", "{E892FC07-995A-4CD7-BF80-D9AFCDB8CF4B}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|x64 = Debug|x64
@@ -63,6 +67,10 @@ Global
 		{8262E060-E23E-4186-9E54-EE13A59F241C}.Debug|x64.Build.0 = Debug|x64
 		{8262E060-E23E-4186-9E54-EE13A59F241C}.Release|x64.ActiveCfg = Release|x64
 		{8262E060-E23E-4186-9E54-EE13A59F241C}.Release|x64.Build.0 = Release|x64
+		{E892FC07-995A-4CD7-BF80-D9AFCDB8CF4B}.Debug|x64.ActiveCfg = Debug|x64
+		{E892FC07-995A-4CD7-BF80-D9AFCDB8CF4B}.Debug|x64.Build.0 = Debug|x64
+		{E892FC07-995A-4CD7-BF80-D9AFCDB8CF4B}.Release|x64.ActiveCfg = Release|x64
+		{E892FC07-995A-4CD7-BF80-D9AFCDB8CF4B}.Release|x64.Build.0 = Release|x64
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -74,6 +82,7 @@ Global
 		{221B0D1B-162B-4E38-B7D4-6B7A88597F64} = {464D1A11-FB9B-497B-AF75-49C66563DFE8}
 		{300E98E5-DDEE-4036-9AFE-ACEB36B21F32} = {BE69F3BF-33A2-49DC-91CB-8795D8245C0C}
 		{8262E060-E23E-4186-9E54-EE13A59F241C} = {EB22A6EA-8A12-4AFC-AFB5-B5AA502279F9}
+		{E892FC07-995A-4CD7-BF80-D9AFCDB8CF4B} = {D360A6FE-1B60-48B0-B062-1ED78278DFEF}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {6666DA98-C1F2-455D-AFF4-098BE7EFD07E}

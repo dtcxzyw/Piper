@@ -159,6 +159,7 @@ DEVICE float sample6(uint32 index) {
         float(base / 24137569u);  // Results in [0,1).
 }
 
+/*
 rtDeclareVariable(optix::Ray, currentRay, rtCurrentRay, );
 rtDeclareVariable(Vec3, backHitPoint, attribute backHitPoint, );
 rtDeclareVariable(Vec3, frontHitPoint, attribute frontHitPoint, );
@@ -193,3 +194,4 @@ DEVICE LightSample sampleOneLight(const Vec3& ori, float u) {
         sample.rad = black;
     return sample;
 }
+*/

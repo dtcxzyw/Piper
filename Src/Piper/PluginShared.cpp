@@ -1,75 +1,120 @@
 #include "../Shared/PluginShared.hpp"
 #include "../Shared/ConfigAPI.hpp"
+#include <fstream>
 #include <sstream>
+#pragma warning(push, 0)
+#include <nvrtc.h>
+#pragma warning(pop)
+
+BUS_MODULE_NAME("Piper.Builtin.PluginHelper");
+
+static std::string loadPTX(const fs::path& path) {
+    BUS_TRACE_BEG() {
+        auto size = fs::file_size(path);
+        std::ifstream in(path, std::ios::in | std::ios::binary);
+        std::string res(size, '#');
+        in.read(res.data(), size);
+        return res;
+    }
+    BUS_TRACE_END();
+}
 
 class PluginHelperImpl final : public PluginHelperAPI {
 private:
-    optix::Context mContext;
-    fs::path mRuntimeLib, mScenePath;
-    // std::map<size_t, optix::Program> mCachedPrograms;
+    OptixDeviceContext mContext;
+    fs::path mScenePath;
+    bool mDebug;
+    OptixModuleCompileOptions mMCO;
+    OptixPipelineCompileOptions mPCO;
+
 public:
-    PluginHelperImpl(optix::Context context, const fs::path& runtimeLib,
-                     const fs::path& scenePath)
-        : mContext(context), mRuntimeLib(runtimeLib), mScenePath(scenePath) {}
-    optix::Context getContext() const override {
+    PluginHelperImpl(OptixDeviceContext context, const fs::path& scenePath,
+                     bool debug, const OptixModuleCompileOptions& MCO,
+                     const OptixPipelineCompileOptions& PCO)
+        : mContext(context), mScenePath(scenePath), mDebug(debug), mMCO(MCO),
+          mPCO(PCO) {}
+    OptixDeviceContext getContext() const override {
         return mContext;
     }
     fs::path scenePath() const override {
         return mScenePath;
     }
-    optix::Program compile(const std::string& entry,
-                           const std::vector<std::string>& selfLibs,
-                           const fs::path& modulePath,
-                           const std::vector<fs::path>& thirdParty,
-                           bool needLib) {
-        /*
-        std::hash<std::string> hasher;
-        size_t hashValue = hasher("RTL@" + mRuntimeLib.string()) ^
-            hasher("ENTRY@" + entry) ^
-            hasher("BASE@" + modulePath.string());
-        for (const auto &lib : selfLibs)
-            hashValue ^= hasher("SELF@" + lib);
-        for (const auto &third : thirdParty)
-            hashValue ^= hasher("THIRD@" + third.string());
-        auto iter = mCachedPrograms.find(hashValue);
-        if (iter != mCachedPrograms.cend())
-            return iter->second;
-        */
-        BUS_TRACE_BEGIN("Piper.Builtin.PluginHelper") {
-            std::vector<std::string> files;
-            if(needLib)
-                files.emplace_back(mRuntimeLib.string());
-            for(const auto& third : thirdParty)
-                files.emplace_back(third.string());
-            for(const auto& lib : selfLibs)
-                files.emplace_back((modulePath / lib).string());
-            try {
-                optix::Program res =
-                    mContext->createProgramFromPTXFiles(files, entry);
-                res->validate();
-                // return mCachedPrograms[hashValue] = res;
-                return res;
-            } catch(...) {
-                std::stringstream ss;
-                ss << "Complie error [entry=" << entry << ", file=";
-                for(auto f : files)
-                    ss << f << ",";
-                ss << "]";
-                std::throw_with_nested(std::runtime_error(ss.str()));
-            }
+    bool isDebug() const override {
+        return mDebug;
+    }
+    Module compile(const std::string& ptx) const override {
+        BUS_TRACE_BEG() {
+            OptixModule mod;
+            checkOptixError(optixModuleCreateFromPTX(mContext, &mMCO, &mPCO,
+                                                     ptx.c_str(), ptx.size(),
+                                                     nullptr, nullptr, &mod));
+            return Module{ mod };
         }
         BUS_TRACE_END();
     }
-    TextureHolder loadTexture(TextureChannel channel,
-                              std::shared_ptr<Config> attr) override;
+    Module compileFile(const fs::path& file) const override {
+        return compile(loadPTX(file));
+    }
+    Module compileSource(const std::string& src) const override;
 };
 
-PluginHelper buildPluginHelper(optix::Context context,
-                               const fs::path& runtimeLib,
-                               const fs::path& scenePath) {
-    return std::make_shared<PluginHelperImpl>(context, runtimeLib, scenePath);
+std::unique_ptr<PluginHelperAPI>
+buildPluginHelper(OptixDeviceContext context, const fs::path& scenePath,
+                  bool debug, const OptixModuleCompileOptions& MCO,
+                  const OptixPipelineCompileOptions& PCO) {
+    return std::unique_ptr<PluginHelperImpl>(context, scenePath, debug, MCO,
+                                              PCO);
 }
 
+static void checkNVRTCError(nvrtcResult res) {
+    if(res != NVRTC_SUCCESS)
+        throw std::runtime_error(std::string("NVRTCError") +
+                                 nvrtcGetErrorString(res));
+}
+
+struct NVRTCProgramDeleter final {
+    void operator()(nvrtcProgram prog) {
+        checkNVRTCError(nvrtcDestroyProgram(&prog));
+    }
+};
+
+static const char* header = R"#()#";
+
+Module PluginHelperImpl::compileSource(const std::string& src) const {
+    BUS_TRACE_BEG() {
+        using Program = std::unique_ptr<_nvrtcProgram, NVRTCProgramDeleter>;
+        Program program;
+        nvrtcProgram prog;
+        const char* headerName = "runtime.hpp";
+        checkNVRTCError(nvrtcCreateProgram(&prog, src.c_str(), "kernel.cu", 1,
+                                           &header, &headerName));
+        program.reset(prog);
+        const char* opt[] = { "-use_fast_math", "-default-device" };
+        try {
+            checkNVRTCError(nvrtcCompileProgram(
+                program.get(), static_cast<int>(std::size(opt)), opt));
+        } catch(...) {
+            size_t siz;
+            if(nvrtcGetProgramLogSize(program.get(), &siz) == NVRTC_SUCCESS) {
+                std::string logStr(siz, '@');
+                if(nvrtcGetProgramLog(program.get(), logStr.data()) ==
+                   NVRTC_SUCCESS) {
+                    std::throw_with_nested(
+                        std::runtime_error("Compile Log:" + logStr));
+                }
+            }
+            throw;
+        }
+        size_t siz;
+        checkNVRTCError(nvrtcGetPTXSize(program.get(), &siz));
+        std::string ptx(siz, '#');
+        checkNVRTCError(nvrtcGetPTX(program.get(), ptx.data()));
+        return compile(ptx);
+    }
+    BUS_TRACE_END();
+}
+
+/*
 #define STB_IMAGE_IMPLEMENTATION
 #include <stb_image.h>
 
@@ -220,3 +265,4 @@ TextureHolder PluginHelperImpl::loadTexture(TextureChannel channel,
     }
     BUS_TRACE_END();
 }
+*/

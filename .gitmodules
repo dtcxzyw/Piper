@@ -1,3 +1,6 @@
 [submodule "Src/ThirdParty/Bus"]
 	path = Src/ThirdParty/Bus
 	url = https://github.com/dtcxzyw/Bus.git
+[submodule "Src/ThirdParty/glm"]
+	path = Src/ThirdParty/glm
+	url = https://github.com/g-truc/glm.git

@@ -1,8 +1,9 @@
 #pragma once
 #include "ConfigAPI.hpp"
 
-struct LightProgram final {
-    int prog, buf;
+struct LightData final {
+    Data sbtData;
+    unsigned maxSampleDim;
 };
 
 class Light : public Bus::ModuleFunctionBase {
@@ -15,7 +16,6 @@ public:
         return "Piper.Light:1";
     }
 
-    virtual LightProgram init(PluginHelper helper,
-                              std::shared_ptr<Config> config) = 0;
-    virtual optix::Program getProgram() = 0;
+    virtual LightData init(PluginHelper helper,
+                           std::shared_ptr<Config> config) = 0;
 };

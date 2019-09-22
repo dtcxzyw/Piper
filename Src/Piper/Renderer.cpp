@@ -8,24 +8,99 @@
 #include "CameraAdapter.hpp"
 #include <any>
 
-PluginHelper buildPluginHelper(optix::Context context,
-                               const fs::path& runtimeLib,
-                               const fs::path& scenePath);
+std::unique_ptr<PluginHelperAPI>
+buildPluginHelper(OptixDeviceContext context, const fs::path& scenePath,
+                  bool debug, const OptixModuleCompileOptions& MCO,
+                  const OptixPipelineCompileOptions& PCO);
 
-optix::Context createContext(std::shared_ptr<Config> config) {
-    int RTXMode = config->getBool("RTXMode", false);
-    RTresult res = rtGlobalSetAttribute(RT_GLOBAL_ATTRIBUTE_ENABLE_RTX,
-                                        sizeof(int), &RTXMode);
-    optix::Context context = optix::Context::create();
-    context->checkErrorNoGetContext(res);
-    context->setExceptionEnabled(RT_EXCEPTION_ALL, true);
-    context->setEntryPointCount(1);
-    context->setRayTypeCount(2);
-    context->setDiskCacheLocation("Cache/Optix");
-    context->setAttribute(RT_CONTEXT_ATTRIBUTE_DISK_CACHE_ENABLED, 1);
-    context->setPrintEnabled(true);
-    context->setPrintBufferSize(1048576);
-    return context;
+BUS_MODULE_NAME("Piper.Builtin.Renderer");
+
+void logCallBack(unsigned int lev, const char* tag, const char* message,
+                 void* cbdata) {
+    Bus::Reporter* reporter = reinterpret_cast<Bus::Reporter*>(cbdata);
+    ReportLevel level = ReportLevel::Info;
+    std::string pre;
+    switch(lev) {
+        case 1:
+            pre = "[FATAL]", level = ReportLevel::Error;
+            break;
+        case 2:
+            level = ReportLevel::Error;
+            break;
+        case 3:
+            level = ReportLevel::Warning;
+            break;
+        default:
+            pre = "[UNKNOWN]";
+            break;
+    }
+    reporter->apply(level, pre + "[" + tag + "]" + message,
+                    BUS_SRCLOC("OptixEngine"));
+}
+
+struct CUDAContextDeleter final {
+    void operator()(CUcontext*) const {
+        CUdevice dev;
+        checkCudaError(cuCtxGetDevice(&dev));
+        checkCudaError(cuDevicePrimaryCtxRelease(dev));
+    }
+};
+using CUDAContext = std::unique_ptr<CUctx_st, CUDAContextDeleter>;
+
+CUDAContext createCUDAContext(Bus::Reporter& reporter) {
+    BUS_TRACE_BEG() {
+        checkCudaError(cuInit(0));
+        int drver;
+        checkCudaError(cuDriverGetVersion(&drver));
+        reporter.apply(ReportLevel::Info,
+                       "driver's CUDA version:" + std::to_string(drver / 1000) +
+                           "." + std::to_string(drver % 1000 / 10),
+                       BUS_DEFSRCLOC());
+        CUdevice dev;
+        checkCudaError(cuDeviceGet(device, 0));
+        char buf[256];
+        checkCudaError(cuDeviceGetName(buf, sizeof(buf), dev));
+        reporter.apply(ReportLevel::Info, "use device " + buf, BUS_DEFSRCLOC());
+        CUcontext ctx;
+        checkCudaError(cuDevicePrimaryCtxRetain(&ctx, dev));
+        return CUDAContext{ ctx };
+    }
+    BUS_TRACE_END();
+}
+
+struct ContextDeleter final {
+    void operator()(OptixDeviceContext ptr) const {
+        checkOptixError(optixDeviceContextDestroy(ptr));
+    }
+};
+using Context = std::unique_ptr<OptixDeviceContext_t, ContextDeleter>;
+
+Context createContext(CUcontext ctx, Bus::Reporter& reporter,
+                      std::shared_ptr<Config> config) {
+    BUS_TRACE_BEG() {
+        checkOptixError(optixInit());
+        OptixDeviceContextOptions opt;
+        opt.logCallbackLevel =
+            static_cast<int>(config->attribute("LogLevel")->asUint());
+        opt.logCallbackFunction = logCallBack;
+        opt.logCallbackData = &reporter;
+        OptixDeviceContext context;
+        checkOptixError(optixDeviceContextCreate(ctx, &opt, &context));
+        checkOptixError(optixDeviceContextSetCacheEnabled(context, 1));
+        checkOptixError(
+            optixDeviceContextSetCacheLocation(context, "Cache/Optix"));
+        checkOptixError(optixDeviceContextSetCacheDatabaseSizes(
+            context, 128 << 20, 512 << 20));
+        unsigned rtver = 0;
+        checkOptixError(optixDeviceContextGetProperty(
+            context, OptixDeviceProperty::OPTIX_DEVICE_PROPERTY_RTCORE_VERSION,
+            &rtver, sizeof(rtver)));
+        reporter.apply(ReportLevel::Info,
+                       "RTCore Version:" + std::to_string(rtver),
+                       BUS_DEFSRCLOC());
+        return Context{ context };
+    }
+    BUS_TRACE_END();
 }
 
 std::shared_ptr<Config> loadScene(Bus::ModuleSystem& sys,
@@ -42,7 +117,7 @@ using MaterialLib = std::map<std::string, std::shared_ptr<Material>>;
 
 MaterialLib loadMaterials(std::shared_ptr<Config> config, PluginHelper helper,
                           Bus::ModuleSystem& sys) {
-    BUS_TRACE_BEGIN("Piper.Builtin.Renderer") {
+    BUS_TRACE_BEG() {
         MaterialLib res;
         for(auto cfg : config->expand()) {
             std::string name = cfg->attribute("Name")->asString();
@@ -66,7 +141,7 @@ using LightLib = std::map<std::string, LightProgram>;
 LightLib loadLights(std::shared_ptr<Config> config, PluginHelper helper,
                     std::vector<std::shared_ptr<Light>>& lig,
                     Bus::ModuleSystem& sys) {
-    BUS_TRACE_BEGIN("Piper.Builtin.Renderer") {
+    BUS_TRACE_BEG() {
         LightLib res;
         for(auto cfg : config->expand()) {
             std::string name = cfg->attribute("Name")->asString();
@@ -109,7 +184,7 @@ using GeometryLib = std::map<std::string, std::shared_ptr<Geometry>>;
 
 GeometryLib loadGeometries(std::shared_ptr<Config> config, PluginHelper helper,
                            Bus::ModuleSystem& sys) {
-    BUS_TRACE_BEGIN("Piper.Builtin.Renderer") {
+    BUS_TRACE_BEG() {
         GeometryLib res;
         for(auto cfg : config->expand()) {
             std::string name = cfg->attribute("Name")->asString();
@@ -162,7 +237,7 @@ void parseNode(std::shared_ptr<Config> root, const MaterialLib& mat,
                std::vector<LightInfo>& lightInst,
                std::vector<std::any>& content, optix::Group group,
                optix::Context context) {
-    BUS_TRACE_BEGIN("Piper.Builtin.Renderer") {
+    BUS_TRACE_BEG() {
         std::string type = root->attribute("Type")->asString();
         std::string name = root->attribute("Name")->asString();
         if(type == "Light") {
@@ -198,27 +273,43 @@ void parseNode(std::shared_ptr<Config> root, const MaterialLib& mat,
 
 void renderImpl(std::shared_ptr<Config> config, const fs::path& scenePath,
                 Bus::ModuleSystem& sys) {
-    BUS_TRACE_BEGIN("Piper.Builtin.Renderer") {
-        auto global = config->attribute("Global");
-        optix::Context context = createContext(global);
-        std::string runtimeLib = global->attribute("RuntimeLib")->asString();
-        PluginHelper helper = buildPluginHelper(
-            context, fs::current_path() / "Libs" / runtimeLib, scenePath);
+    BUS_TRACE_BEG() {
+        CUDAContext ctx = createCUDAContext(sys.getReporter());
+        auto global = config->attribute("Core");
+        Context context = createContext(ctx.get(), sys.getReporter(), global);
+        bool debug = global->attribute("Debug")->asBool();
+        OptixModuleCompileOptions MCO;
+        MCO.debugLevel = (debug ? OPTIX_COMPILE_DEBUG_LEVEL_FULL :
+                                  OPTIX_COMPILE_DEBUG_LEVEL_NONE);
+        MCO.maxRegisterCount = OPTIX_COMPILE_DEFAULT_MAX_REGISTER_COUNT;
+        MCO.optLevel = (debug ? OPTIX_COMPILE_OPTIMIZATION_LEVEL_0 :
+                                OPTIX_COMPILE_OPTIMIZATION_LEVEL_3);
+        OptixPipelineCompileOptions PCO;
+        PCO.exceptionFlags = OPTIX_EXCEPTION_FLAG_STACK_OVERFLOW |
+            OPTIX_EXCEPTION_FLAG_TRACE_DEPTH;
+        if(debug)
+            PCO.exceptionFlags |= OPTIX_EXCEPTION_FLAG_DEBUG;
+        PCO.pipelineLaunchParamsVariableName = "globalLaunchParam";
+        PCO.traversableGraphFlags = OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_ANY;
+        PCO.usesMotionBlur = false;
+        PCO.numAttributeValues = PCO.numPayloadValues = 3;
+        std::shared_ptr<PluginHelperAPI> helper =
+            buildPluginHelper(context.get(), scenePath, debug, MCO, PCO);
         auto& reporter = sys.getReporter();
         reporter.apply(Bus::ReportLevel::Info, "Loading camera",
-                       BUS_SRCLOC("Piper.Builtin.Renderer"));
+                       BUS_DEFSRCLOC());
         CameraAdapter camera(config->attribute("Camera"), helper, sys);
         reporter.apply(Bus::ReportLevel::Info, "Loading materials",
-                       BUS_SRCLOC("Piper.Builtin.Renderer"));
+                       BUS_DEFSRCLOC());
         MaterialLib materials =
             loadMaterials(config->attribute("MaterialLib"), helper, sys);
         reporter.apply(Bus::ReportLevel::Info, "Loading lights",
-                       BUS_SRCLOC("Piper.Builtin.Renderer"));
+                       BUS_DEFSRCLOC());
         std::vector<std::shared_ptr<Light>> lig;
         LightLib lights =
             loadLights(config->attribute("LightLib"), helper, lig, sys);
         reporter.apply(Bus::ReportLevel::Info, "Configurating lights",
-                       BUS_SRCLOC("Piper.Builtin.Renderer"));
+                       BUS_DEFSRCLOC());
         std::vector<int> progs;
         for(auto light : lights)
             progs.push_back(light.second.prog);
@@ -229,24 +320,24 @@ void renderImpl(std::shared_ptr<Config> config, const fs::path& scenePath,
             prog->setCallsitePotentialCallees("call_in_sampleOneLight", progs);
         }
         reporter.apply(Bus::ReportLevel::Info, "Loading integrator",
-                       BUS_SRCLOC("Piper.Builtin.Renderer"));
+                       BUS_DEFSRCLOC());
         optix::Program inteProg;
         std::shared_ptr<Integrator> integrator =
             loadIntegrator(config->attribute("Integrator"), helper,
                            camera.getPTX(), inteProg, sys);
         context->setRayGenerationProgram(0, inteProg);
         reporter.apply(Bus::ReportLevel::Info, "Loading driver",
-                       BUS_SRCLOC("Piper.Builtin.Renderer"));
+                       BUS_DEFSRCLOC());
         uint2 filmSize;
         std::shared_ptr<Driver> driver =
             loadDriver(config->attribute("Driver"), helper, filmSize, sys);
         camera.prepare(inteProg, filmSize);
         reporter.apply(Bus::ReportLevel::Info, "Loading geometries",
-                       BUS_SRCLOC("Piper.Builtin.Renderer"));
+                       BUS_DEFSRCLOC());
         GeometryLib geos =
             loadGeometries(config->attribute("GeometryLib"), helper, sys);
         reporter.apply(Bus::ReportLevel::Info, "Loading scene",
-                       BUS_SRCLOC("Piper.Builtin.Renderer"));
+                       BUS_DEFSRCLOC());
         std::vector<LightInfo> lightInst;
         std::vector<std::any> content;
         optix::Group group = context->createGroup();
@@ -276,7 +367,7 @@ void renderImpl(std::shared_ptr<Config> config, const fs::path& scenePath,
         }
         context["lightPrograms"]->set(lightProg);
         reporter.apply(Bus::ReportLevel::Info, "Everything is ready.",
-                       BUS_SRCLOC("Piper.Builtin.Renderer"));
+                       BUS_DEFSRCLOC());
         driver->doRender();
     }
     BUS_TRACE_END();
@@ -293,7 +384,7 @@ public:
             return EXIT_SUCCESS;
         }
         sys.getReporter().apply(ReportLevel::Error, "Need two arguments.",
-                                BUS_SRCLOC("Piper.Builtin.Renderer"));
+                                BUS_DEFSRCLOC());
         return EXIT_FAILURE;
     }
 };

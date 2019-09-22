@@ -44,14 +44,14 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <OutDir>$(SolutionDir)Bin\</OutDir>
     <ExecutablePath>$(ExecutablePath)</ExecutablePath>
-    <IncludePath>$(OPTIX_PATH)include;$(CUDA_PATH)\include;$(IncludePath)</IncludePath>
-    <LibraryPath>$(OPTIX_PATH)lib64;$(LibraryPath)</LibraryPath>
+    <IncludePath>$(OPTIX_PATH)\include;$(CUDA_PATH)\include;$(IncludePath)</IncludePath>
+    <LibraryPath>$(LibraryPath)</LibraryPath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <OutDir>$(SolutionDir)Bin\</OutDir>
     <ExecutablePath>$(ExecutablePath)</ExecutablePath>
-    <IncludePath>$(OPTIX_PATH)include;$(CUDA_PATH)\include;$(IncludePath)</IncludePath>
-    <LibraryPath>$(OPTIX_PATH)lib64;$(LibraryPath)</LibraryPath>
+    <IncludePath>$(OPTIX_PATH)\include;$(CUDA_PATH)\include;$(IncludePath)</IncludePath>
+    <LibraryPath>$(LibraryPath)</LibraryPath>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <ClCompile>
@@ -60,12 +60,13 @@
       <SDLCheck>true</SDLCheck>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp17</LanguageStandard>
-      <PreprocessorDefinitions>BUS_MSVC_DELAYLOAD;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>BUS_MSVC_DELAYLOAD;_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
-      <AdditionalDependencies>optix.6.0.0.lib;optixu.6.0.0.lib;%(AdditionalDependencies)</AdditionalDependencies>
-      <DelayLoadDLLs>optix.6.0.0.dll;optixu.6.0.0.dll</DelayLoadDLLs>
+      <AdditionalDependencies>%(AdditionalDependencies)</AdditionalDependencies>
+      <DelayLoadDLLs>
+      </DelayLoadDLLs>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -77,14 +78,15 @@
       <SDLCheck>true</SDLCheck>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp17</LanguageStandard>
-      <PreprocessorDefinitions>BUS_MSVC_DELAYLOAD;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>BUS_MSVC_DELAYLOAD;_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
-      <AdditionalDependencies>optix.6.0.0.lib;optixu.6.0.0.lib;%(AdditionalDependencies)</AdditionalDependencies>
-      <DelayLoadDLLs>optix.6.0.0.dll;optixu.6.0.0.dll</DelayLoadDLLs>
+      <AdditionalDependencies>%(AdditionalDependencies)</AdditionalDependencies>
+      <DelayLoadDLLs>
+      </DelayLoadDLLs>
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
@@ -106,7 +108,9 @@
     <ClInclude Include="..\..\Src\Shared\KernelShared.hpp" />
     <ClInclude Include="..\..\Src\Shared\LightAPI.hpp" />
     <ClInclude Include="..\..\Src\Shared\MaterialAPI.hpp" />
+    <ClInclude Include="..\..\Src\Shared\OptixHelper.hpp" />
     <ClInclude Include="..\..\Src\Shared\PluginShared.hpp" />
+    <ClInclude Include="..\..\Src\Shared\SamplerAPI.hpp" />
     <ClInclude Include="..\..\Src\Shared\Shared.hpp" />
   </ItemGroup>
   <ItemGroup>

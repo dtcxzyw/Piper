@@ -42,7 +42,9 @@ public:
                 mContext["driverLaunchIndex"]->setUint(i);
                 mContext->validate();
                 mContext->launch(0, mWidth, mHeight);
-                std::cout << "Process:" << (i + 1) * 100.0 / mSample << "%"
+                std::cout.precision(2);
+                std::cout << std::fixed
+                          << "Process:" << (i + 1) * 100.0 / mSample << "%"
                           << std::endl;
             }
             {

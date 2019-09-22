@@ -11,7 +11,5 @@ public:
         return "Piper.Material:1";
     }
 
-    virtual void init(PluginHelper helper, std::shared_ptr<Config> config) = 0;
-
-    virtual optix::Material getMaterial() const = 0;
+    virtual Data init(PluginHelper helper, std::shared_ptr<Config> config) = 0;
 };

@@ -49,6 +49,12 @@
     <ClInclude Include="..\..\Src\Shared\CommandAPI.hpp">
       <Filter>Shared</Filter>
     </ClInclude>
+    <ClInclude Include="..\..\Src\Shared\OptixHelper.hpp">
+      <Filter>Shared</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\Src\Shared\SamplerAPI.hpp">
+      <Filter>Shared</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <Filter Include="Shared">

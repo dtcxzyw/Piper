@@ -1,43 +1,57 @@
 #include "../../Shared/LightAPI.hpp"
 #include "DataDesc.hpp"
+#pragma warning(push, 0)
+#include <optix_function_table_definition.h>
+#include <optix_stubs.h>
+#pragma warning(pop)
+
+BUS_MODULE_NAME("Piper.BuiltinLight.SimpleLight");
 
 class DirectionalLight final : public Light {
 private:
-    optix::Program mProgram;
-    optix::Buffer mBuf;
+    Module mProg;
+    ProgramGroup mProgramGroup;
 
 public:
     explicit DirectionalLight(Bus::ModuleInstance& instance)
         : Light(instance) {}
-    LightProgram init(PluginHelper helper,
-                      std::shared_ptr<Config> cfg) override {
-        optix::Context context = helper->getContext();
-        mBuf = context->createBuffer(RT_BUFFER_INPUT, RTformat::RT_FORMAT_BYTE,
-                                     sizeof(DirLight));
-        {
-            BufferMapGuard guard(mBuf, RT_BUFFER_MAP_WRITE_DISCARD);
-            DirLight& data = guard.ref<DirLight>();
+    LightData init(PluginHelper helper, std::shared_ptr<Config> cfg) override {
+        BUS_TRACE_BEG() {
+            DirLight data;
             data.lum = cfg->attribute("Lum")->asVec3();
             data.direction = normalize(cfg->attribute("Direction")->asVec3());
-            data.distance = cfg->attribute("Distance")->asFloat();
+            data.distance = cfg->attribute("Distance")->asFloat() - (1e-8f);
+            mProg = helper->compileFile(modulePath() / "DirLight.ptx");
+            OptixProgramGroupDesc desc = {};
+            desc.kind = OPTIX_PROGRAM_GROUP_KIND_CALLABLES;
+            desc.callables.moduleCC = mProg.get();
+            desc.callables.entryFunctionNameCC =
+                "__continuation_callable__sample";
+            OptixProgramGroupOptions opt = {};
+            OptixProgramGroup group;
+            checkOptixError(optixProgramGroupCreate(helper->getContext(), &desc,
+                                                    1, &opt, nullptr, nullptr,
+                                                    &group));
+            mProgramGroup.reset(group);
+            LightData res;
+            res.sbtData = packSBT(mProgramGroup.get(), data);
+            res.maxSampleDim = 0;
+            return res;
         }
-        mBuf->validate();
-        mProgram = helper->compile("sample", { "DirLight.ptx" },
-                                   modulePath().parent_path());
-        LightProgram res;
-        res.prog = mProgram->getId();
-        res.buf = mBuf->getId();
-        return res;
+        BUS_TRACE_END();
     }
-    optix::Program getProgram() override {
-        return mProgram;
+    ~DirectionalLight() {
+        mProgramGroup.reset();
+        mProg.reset();
     }
 };
 
 class Instance final : public Bus::ModuleInstance {
 public:
     Instance(const fs::path& path, Bus::ModuleSystem& sys)
-        : Bus::ModuleInstance(path, sys) {}
+        : Bus::ModuleInstance(path, sys) {
+        checkOptixError(optixInit());
+    }
     Bus::ModuleInfo info() const override {
         Bus::ModuleInfo res;
         res.name = "Piper.BuiltinLight.SimpleLight";

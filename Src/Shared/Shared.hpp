@@ -1,18 +1,17 @@
 #pragma once
-#pragma warning(push,0)
-#define NOMINMAX
-#include <optixu/optixu_math.h>
-#include <optixu/optixu_matrix.h>
-#include <optixu/optixu_quaternion_namespace.h>
-#include <optixu/optixu_aabb_namespace.h>
+#pragma warning(push, 0)
+#include "../ThirdParty/glm/glm/glm.hpp"
+#include "../ThirdParty/glm/glm/gtc/quaternion.hpp"
+#include <optix.h>
 #pragma warning(pop)
 
-using Vec3 = float3;
-using Vec2 = float2;
-using Vec4 = float4;
-using Mat4 = optix::Matrix4x4;
-using Mat3 = optix::Matrix3x3;
-using optix::Quaternion;
+using Vec3 = glm::vec3;
+using Vec2 = glm::vec2;
+using Vec4 = glm::vec4;
+using Mat4 = glm::mat4;
+using Mat3 = glm::mat3;
+using Quat = glm::quat;
+using Uint2 = glm::uvec2;
 using Spectrum = Vec3;
 
 struct LightSample final {
@@ -22,8 +21,8 @@ struct LightSample final {
 
 constexpr unsigned geometryMask = 1 << 0;
 constexpr unsigned lightVolumeMask = 1 << 1;
-constexpr unsigned radianceRayType = 0;
-constexpr unsigned shadowRayType = 1;
+constexpr unsigned radianceRay = 0;
+constexpr unsigned occlusionRay = 1;
 
 enum class BxDFType {
     Reflection = 1,
@@ -34,13 +33,24 @@ enum class BxDFType {
     All = 31
 };
 
+enum class SBTSlot {
+    generateRay,
+    samplePixel,
+    sampleOneLight,
+    calcPayload,
+    userOffset
+};
+
 struct SRT final {
     Vec3 scale;
-    Quaternion rotate;
+    Quat rotate;
     Vec3 trans;
     Mat4 getPointTrans() const {
-        float mat[16];
-        rotate.toMatrix(mat);
-        return Mat4::translate(trans) * Mat4(mat) * Mat4::scale(scale);
+        return glm::scale(
+            glm::translate(glm::mat4{}, trans) * glm::mat4_cast(rotate), scale);
     }
+};
+
+struct LaunchParam final {
+    unsigned samplerSbtOffset, lightSbtOffset;
 };
