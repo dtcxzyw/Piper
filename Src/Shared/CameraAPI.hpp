@@ -1,6 +1,10 @@
 #pragma once
 #include "ConfigAPI.hpp"
 
+struct CameraData final {
+    unsigned maxSampleDim;
+};
+
 class Camera : public Bus::ModuleFunctionBase {
 protected:
     explicit Camera(Bus::ModuleInstance& instance)
@@ -11,11 +15,12 @@ public:
         return "Piper.Camera:1";
     }
 
-    virtual fs::path init(PluginHelper helper, std::shared_ptr<Config> device) = 0;
+    virtual CameraData init(PluginHelper helper,
+                            std::shared_ptr<Config> device) = 0;
 
-    virtual void setArgs(optix::Program prog, float focalLength, float fStop,
-                         float focalDistance, uint2 fullFilm, Vec3 pos,
-                         const Quaternion& posture) const = 0;
+    virtual Data setArgs(float focalLength, float fStop, float focalDistance,
+                         Uint2 fullFilm, Vec3 pos,
+                         const Quat& posture) const = 0;
 };
 
 inline float toFov(float focalLength, Vec2 sensor) {

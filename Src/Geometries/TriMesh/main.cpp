@@ -1,95 +1,64 @@
 #include "../../Shared/CommandAPI.hpp"
 #include "../../Shared/GeometryAPI.hpp"
 
-void load(const fs::path& path, optix::Buffer vertexBuf, optix::Buffer indexBuf,
-          optix::Buffer normal, optix::Buffer texCoord, const SRT& trans,
-          bool doTrans);
+void load(CUstream stream, const fs::path& path, uint64_t& vertexSize,
+          uint64_t& indexSize, Buffer& vertexBuf, Buffer& indexBuf,
+          Buffer& normalBuf, Buffer& texCoordBuf);
 std::shared_ptr<Bus::ModuleFunctionBase>
 getCommand(Bus::ModuleInstance& instance);
 
-const char* moduleName = "Piper.BuiltinGeometry.TriMesh";
+BUS_MODULE_NAME("Piper.BuiltinGeometry.TriMesh");
 
 class TriMesh final : public Geometry {
 private:
-    optix::Buffer mVertex, mIndex, mNormal, mTexCoord, mMat;
-    optix::GeometryTriangles mGeometryTriangle;
-    optix::Geometry mGeometry;
+    Buffer mVertex, mIndex, mNormal, mTexCoord, mMat, mAccel;
     bool mBuiltinTriAPI;
-    optix::Program mAttribute, mIntersect, mBounds;
+    Module mModule;
 
 public:
     explicit TriMesh(Bus::ModuleInstance& instance) : Geometry(instance) {}
-    void init(PluginHelper helper, std::shared_ptr<Config> config) override {
-        BUS_TRACE_BEGIN(moduleName) {
+    GeometryData init(PluginHelper helper, std::shared_ptr<Config> config,
+                      uint32_t& hitGroupOffset) override {
+        BUS_TRACE_BEG() {
             mBuiltinTriAPI = config->getBool("BuiltinTriangleAPI", false);
             fs::path path =
                 helper->scenePath() / config->attribute("Path")->asString();
             SRT srt = config->getTransform("Transform");
-            optix::Context context = helper->getContext();
-            mVertex = context->createBuffer(RT_BUFFER_INPUT);
-            mNormal = context->createBuffer(RT_BUFFER_INPUT);
-            mTexCoord = context->createBuffer(RT_BUFFER_INPUT);
-            mIndex = context->createBuffer(RT_BUFFER_INPUT);
-            load(path, mVertex, mIndex, mNormal, mTexCoord, srt,
-                 !mBuiltinTriAPI);
+            uint64_t vertexSize, indexSize;
+            load(0, path, vertexSize, indexSize, mVertex, mIndex, mNormal,
+                 mTexCoord);
             auto mp = modulePath().parent_path();
             if(mBuiltinTriAPI) {
-                mAttribute = helper->compile("meshAttributes",
-                                             { "Triangle.ptx" }, mp, {}, false);
-                mGeometryTriangle = context->createGeometryTriangles();
-                mGeometryTriangle->setAttributeProgram(mAttribute);
-                RTsize vertSize;
-                mVertex->getSize(vertSize);
-                mGeometryTriangle->setVertices(static_cast<unsigned>(vertSize),
-                                               mVertex, RT_FORMAT_FLOAT3);
-                Mat4 mat = srt.getPointTrans();
-                mGeometryTriangle->setPreTransformMatrix(false, mat.getData());
-                mGeometryTriangle->setTriangleIndices(mIndex,
-                                                      RT_FORMAT_UNSIGNED_INT3);
-                RTsize faceSize;
-                mIndex->getSize(faceSize);
-                mGeometryTriangle->setPrimitiveCount(
-                    static_cast<unsigned>(faceSize));
-                mGeometryTriangle->setMaterialCount(1);
-                mMat = context->createBuffer(RT_BUFFER_INPUT);
-                mMat->setFormat(RT_FORMAT_BYTE);
-                mMat->setSize(faceSize);
-                {
-                    BufferMapGuard guard(mMat, RT_BUFFER_MAP_WRITE_DISCARD);
-                    memset(guard.raw(), 0, sizeof(faceSize));
-                }
-                mGeometryTriangle->setMaterialIndices(mMat, 0, 1,
-                                                      RT_FORMAT_BYTE);
-                mGeometryTriangle->validate();
+                OptixAccelBuildOptions opt;
+                opt.operation = OPTIX_BUILD_OPERATION_BUILD;
+                opt.buildFlags = OPTIX_BUILD_FLAG_NONE;
+                opt.motionOptions.numKeys = 0;
+                opt.motionOptions.flags = OPTIX_MOTION_FLAG_NONE;
+                opt.motionOptions.timeBegin = opt.motionOptions.timeEnd = 0.0f;
+
+                OptixBuildInput input;
+                input.type = OPTIX_BUILD_INPUT_TYPE_TRIANGLES;
+                OptixBuildInputTriangleArray& arr = input.triangleArray;
+                OptixGeometryFlags flag = OPTIX_GEOMETRY_FLAG_NONE;
+                arr.flags = &flag;
+                arr.indexBuffer = asPtr(mIndex);
+                arr.indexFormat = OPTIX_INDICES_FORMAT_UNSIGNED_INT3;
+                arr.indexStrideInBytes = sizeof(uint3);
+                arr.numIndexTriplets = 0;
+                arr.numSbtRecords = 1;
+                arr.numVertices = vertexSize;
+                arr.preTransform = ;
+                arr.primitiveIndexOffset = 0;
+                arr.sbtIndexOffsetBuffer = ;
+                arr.sbtIndexOffsetSizeInBytes = ;
+                arr.sbtIndexOffsetStrideInBytes = ;
+                arr.vertexBuffers = asPtr(mVertex);
+                arr.vertexFormat = OPTIX_VERTEX_FORMAT_FLOAT3;
+                arr.vertexStrideInBytes = sizeof(Vec3);
+
             } else {
-                mGeometry = context->createGeometry();
-                mGeometry["geometryVertexBuffer"]->set(mVertex);
-                mGeometry["geometryIndexBuffer"]->set(mIndex);
-                mGeometry["geometryTexCoordBuffer"]->set(mTexCoord);
-                mGeometry["geometryNormalBuffer"]->set(mNormal);
-                mBounds = helper->compile("bounds", { "Triangle.ptx" }, mp, {},
-                                          false);
-                mGeometry->setBoundingBoxProgram(mBounds);
-                mIntersect = helper->compile("intersect", { "Triangle.ptx" },
-                                             mp, {}, false);
-                mGeometry->setIntersectionProgram(mIntersect);
-                RTsize size;
-                mIndex->getSize(size);
-                mGeometry->setPrimitiveCount(static_cast<unsigned>(size));
+                BUS_TRACE_THROW(std::logic_error("unimplemented feature"));
             }
-        }
-        BUS_TRACE_END();
-    }
-    void setInstance(optix::GeometryInstance inst) override {
-        BUS_TRACE_BEGIN(moduleName) {
-            if(mBuiltinTriAPI) {
-                inst["geometryVertexBuffer"]->set(mVertex);
-                inst["geometryIndexBuffer"]->set(mIndex);
-                inst["geometryTexCoordBuffer"]->set(mTexCoord);
-                inst["geometryNormalBuffer"]->set(mNormal);
-                inst->setGeometryTriangles(mGeometryTriangle);
-            } else
-                inst->setGeometry(mGeometry);
         }
         BUS_TRACE_END();
     }
@@ -101,7 +70,7 @@ public:
         : Bus::ModuleInstance(path, sys) {}
     Bus::ModuleInfo info() const override {
         Bus::ModuleInfo res;
-        res.name = moduleName;
+        res.name = BUS_DEFAULT_MODULE_NAME;
         res.guid = Bus::str2GUID("{E5BCA3C5-582B-408E-ACB2-6000C821995E}");
         res.busVersion = BUS_VERSION;
         res.version = "0.0.1";
@@ -120,7 +89,7 @@ public:
     std::shared_ptr<Bus::ModuleFunctionBase> instantiate(Name name) override {
         if(name == "TriMesh")
             return std::make_shared<TriMesh>(*this);
-        if(name == "MeshCast")
+        if(name == "MeshConverter")
             return getCommand(*this);
         return nullptr;
     }

@@ -1,30 +1,57 @@
 #include "../../Shared/IntegratorAPI.hpp"
+#include "DataDesc.hpp"
+#pragma warning(push, 0)
+#include <optix_function_table_definition.h>
+#include <optix_stubs.h>
+#pragma warning(pop)
+
+BUS_MODULE_NAME("Piper.BuiltinIntegrator.PathTracer");
 
 class PathTracer final : public Integrator {
 private:
-    optix::Program mProgram;
+    Module mModule;
+    ProgramGroup mGroup;
 
 public:
     explicit PathTracer(Bus::ModuleInstance& instance) : Integrator(instance) {}
-    optix::Program init(PluginHelper helper, std::shared_ptr<Config> config,
-                        const fs::path& cameraPTX) override {
-        mProgram = helper->compile("traceKernel", { "PathKernel.ptx" },
-                                   modulePath().parent_path(), { cameraPTX });
-        mProgram["integratorSample"]->setUint(
-            config->attribute("Sample")->asUint());
-        mProgram["integratorMaxDepth"]->setUint(
-            config->attribute("MaxDepth")->asUint());
-        return mProgram;
+    IntegratorData init(PluginHelper helper,
+                        std::shared_ptr<Config> config) override {
+        BUS_TRACE_BEG() {
+            mModule = helper->compileFile(modulePath().parent_path() /
+                                          "PathKernel.ptx");
+            OptixProgramGroupDesc desc;
+            desc.kind = OPTIX_PROGRAM_GROUP_KIND_CALLABLES;
+            desc.flags = 0;
+            desc.callables.entryFunctionNameCC =
+                "__continuation_callable__traceKernel";
+            desc.callables.moduleCC = mModule.get();
+            OptixProgramGroupOptions opt;
+            OptixProgramGroup group;
+            checkOptixError(optixProgramGroupCreate(helper->getContext(), &desc,
+                                                    1, &opt, nullptr, nullptr,
+                                                    &group));
+            mGroup.reset(group);
+            DataDesc data;
+            data.maxDepth = config->attribute("MaxDepth")->asUint();
+            data.sample = config->attribute("Sample")->asUint();
+            IntegratorData res;
+            res.sbtData = packSBT(mGroup.get(), data);
+            res.maxSampleDim = 0;
+            return res;
+        }
+        BUS_TRACE_END();
     }
 };
 
 class Instance final : public Bus::ModuleInstance {
 public:
     Instance(const fs::path& path, Bus::ModuleSystem& sys)
-        : Bus::ModuleInstance(path, sys) {}
+        : Bus::ModuleInstance(path, sys) {
+        checkOptixError(optixInit());
+    }
     Bus::ModuleInfo info() const override {
         Bus::ModuleInfo res;
-        res.name = "Piper.BuiltinIntegrator.PathTracer";
+        res.name = BUS_DEFAULT_MODULE_NAME;
         res.guid = Bus::str2GUID("{E8D0D7A4-A55C-443C-A4AB-3EE3E5BA7928}");
         res.busVersion = BUS_VERSION;
         res.version = "0.0.1";

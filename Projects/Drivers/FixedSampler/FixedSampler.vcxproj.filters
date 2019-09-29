@@ -4,4 +4,10 @@
     <ClCompile Include="..\..\..\Src\Drivers\FixedSampler\main.cpp" />
     <ClCompile Include="..\..\..\Src\ThirdParty\Bus\BusImpl.cpp" />
   </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="..\..\..\Src\Drivers\FixedSampler\DataDesc.hpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <CustomBuild Include="..\..\..\Src\Drivers\FixedSampler\Kernel.cu" />
+  </ItemGroup>
 </Project>

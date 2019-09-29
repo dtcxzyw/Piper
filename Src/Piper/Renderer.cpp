@@ -289,7 +289,7 @@ void renderImpl(std::shared_ptr<Config> config, const fs::path& scenePath,
             OPTIX_EXCEPTION_FLAG_TRACE_DEPTH;
         if(debug)
             PCO.exceptionFlags |= OPTIX_EXCEPTION_FLAG_DEBUG;
-        PCO.pipelineLaunchParamsVariableName = "globalLaunchParam";
+        PCO.pipelineLaunchParamsVariableName = "launchParam";
         PCO.traversableGraphFlags = OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_ANY;
         PCO.usesMotionBlur = false;
         PCO.numAttributeValues = PCO.numPayloadValues = 3;

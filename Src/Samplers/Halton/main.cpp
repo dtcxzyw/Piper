@@ -2,6 +2,11 @@
 #include <algorithm>
 #include <chrono>
 #include <random>
+#include <sstream>
+#pragma warning(push, 0)
+#include <optix_function_table_definition.h>
+#include <optix_stubs.h>
+#pragma warning(pop)
 
 // http://gruenschloss.org/halton/halton.zip
 // Copyright (c) 2012 Leonhard Gruenschloss (leonhard@gruenschloss.org)
@@ -49,7 +54,7 @@ std::vector<std::vector<unsigned>> initFaure(unsigned maxBase) {
         for(unsigned i = 0; i < k; ++i)
             perms[k][i] = i;
     }
-    for(unsigned base = 4; base <= max_base; ++base) {
+    for(unsigned base = 4; base <= maxBase; ++base) {
         perms[base].resize(base);
         const unsigned b = base / 2;
         if(base & 1)  // odd
@@ -82,7 +87,7 @@ std::vector<std::vector<unsigned>> initRandom(unsigned maxBase, RNG& eng) {
         perms[base].resize(base);
         for(unsigned i = 0; i < base; ++i)
             perms[base][i] = i;
-        std::random_shuffle(perms[base].begin(), perms[base].end(), eng);
+        std::shuffle(perms[base].begin(), perms[base].end(), eng);
     }
     return perms;
 }
@@ -97,45 +102,70 @@ unsigned invert(unsigned base, unsigned digits, unsigned index,
     return result;
 }
 
-std::vector<std::vector<unsigned>>
-initTable(const std::vector<unsigned>& primes,
-          const std::vector<std::vector<unsigned>>& perms,
-          unsigned maxTableSize) {
-    std::vector<std::vector<unsigned>> res(primes.size());
-    res.push_back({});
-    for(size_t i = 1; i < primes.size(); ++i) {
-        unsigned base = primes[i];
+void genCode(std::stringstream& ss, const std::vector<unsigned>& perms,
+             unsigned base, unsigned maxTableSize, unsigned kth) {
+    // Special case: radical inverse in base 2, with direct bit reversal.
+    if(base == 2) {
+        ss << R"#(__device__ float __direct_callable__sample0(unsigned idx) {
+    idx = (idx << 16) | (idx >> 16);
+    idx = ((idx & 0x00ff00ff) << 8) | ((idx & 0xff00ff00) >> 8);
+    idx = ((idx & 0x0f0f0f0f) << 4) | ((idx & 0xf0f0f0f0) >> 4);
+    idx = ((idx & 0x33333333) << 2) | ((idx & 0xcccccccc) >> 2);
+    idx = ((idx & 0x55555555) << 1) | ((idx & 0xaaaaaaaa) >> 1);
+    union Result {
+        unsigned u;
+        float f;
+    } res;
+    res.u = 0x3f800000u | (idx >> 9);
+    return res.f - 1.0f;
+})#";
+    } else {
         unsigned digits = 1, powBase = base;
         while(powBase * base <= maxTableSize)
             powBase *= base, ++digits;
 
-        /*
         uint64_t maxPower = powBase;
-        while(maxPower * pow_base < (1ULL << 32))  // 32-bit unsigned precision
+        while(maxPower * powBase < (1ULL << 32))  // 32-bit unsigned precision
             maxPower *= powBase;
         uint64_t power = maxPower / powBase;
-        */
-
-        res[i].resize(powBase);
-        std::vector<unsigned>& ref = res[i];
-        for(unsigned j = 0; j < powBase; ++j)
-            ref[j] = invert(base, digits, j, perms[base]);
+        ss << "static __device__ __constant__ unsigned LUT" << base << '['
+           << powBase << "] = {";
+        for(unsigned i = 0; i < powBase; ++i) {
+            if(i)
+                ss << ',';
+            ss << invert(base, digits, i, perms);
+        }
+        ss << "};\n__device__ float __direct_callable__sample" << kth
+           << "(unsigned idx) {\n";
+        ss << "return (LUT" << base << "[idx % " << powBase << "u] * " << power
+           << "u + ";
+        unsigned div = 1;
+        while(power > powBase) {
+            div *= powBase;
+            power /= powBase;
+            ss << "LUT" << base << "[(idx/" << div << "u) % " << powBase
+               << "u] * " << power << "u + ";
+        }
+        ss << "LUT" << base << "[(idx/" << div * powBase << "u) % " << powBase
+           << "u]) * static_cast<float>(" << (0x1.fffffcp-1 / maxPower)
+           << ");}\n";
     }
-    return res;
 }
 
 std::string generateSoruce(unsigned maxDim, std::shared_ptr<Config> config,
                            Bus::Reporter& reporter) {
     BUS_TRACE_BEG() {
         if(maxDim == 0) {
-            reporter.apply(ReportLevel::Warning, "maxDim==0", BUS_DEFSRCLOC());
+            reporter.apply(ReportLevel::Warning, "MaxDim==0", BUS_DEFSRCLOC());
             return "";
         }
         if(maxDim > 256)
-            BUS_TRACE_THROW(std::runtime_error("Need maxDim<=256"));
+            BUS_TRACE_THROW(std::runtime_error("Need MaxDim<=256"));
         std::vector<unsigned> primeTable = getPrimeTable(maxDim);
         std::string initType = config->getString("Type", "Faure");
         unsigned maxTableSize = config->getUint("MaxPermTableSize", 500U);
+        if(maxTableSize > 65536)
+            BUS_TRACE_THROW(std::runtime_error("Need MaxPermTableSize<=65536"));
         std::vector<std::vector<unsigned>> perms;
         if(initType == "Faure")
             perms = initFaure(primeTable.back());
@@ -150,13 +180,16 @@ std::string generateSoruce(unsigned maxDim, std::shared_ptr<Config> config,
                            .time_since_epoch()
                            .count();
 
-            if(type == "LinearCongruential")
-                perms = initRandom(primeTable.back(), std::minstd_rand(seed));
-            else if(type == "MersenneTwister")
-                perms = initRandom(primeTable.back(), std::mt19937_64(seed));
-            else if(type == "SubtractWithCarry")
-                perms = initRandom(primeTable.back(), std::ranlux48(seed));
-            else if(type == "Device") {
+            if(type == "LinearCongruential") {
+                std::minstd_rand rng(static_cast<unsigned>(seed));
+                perms = initRandom(primeTable.back(), rng);
+            } else if(type == "MersenneTwister") {
+                std::mt19937_64 rng(seed);
+                perms = initRandom(primeTable.back(), rng);
+            } else if(type == "SubtractWithCarry") {
+                std::ranlux48 rng(seed);
+                perms = initRandom(primeTable.back(), rng);
+            } else if(type == "Device") {
                 std::random_device dev;
                 if(dev.entropy() == 0.0)
                     BUS_TRACE_THROW(
@@ -165,11 +198,13 @@ std::string generateSoruce(unsigned maxDim, std::shared_ptr<Config> config,
                     perms = initRandom(primeTable.back(), dev);
             }
         }
-        table = initTable(primeTable, perms, maxTableSize);
-        std::string res = R"#(
-using uint32=unsigned;
-        )#";
-        return res;
+        std::stringstream ss;
+        ss.precision(15);
+        for(unsigned i = 0; i < maxDim; ++i) {
+            unsigned base = primeTable[i];
+            genCode(ss, perms[base], base, maxTableSize, i);
+        }
+        return ss.str();
     }
     BUS_TRACE_END();
 }
@@ -187,7 +222,7 @@ public:
             std::string src = generateSoruce(maxDim, config, reporter());
             reporter().apply(ReportLevel::Debug, "Source:\n" + src,
                              BUS_DEFSRCLOC());
-            mModule = helper->compileSource();
+            mModule = helper->compileSource(src);
             std::vector<std::string> funcNames;
             std::vector<OptixProgramGroupDesc> descs;
             for(unsigned i = 0; i < maxDim; ++i) {
@@ -200,14 +235,16 @@ public:
                 desc.callables.entryFunctionNameDC = funcNames.back().c_str();
                 descs.emplace_back(desc);
             }
-            std::vector<OptixProgramGroup_t> pgs(maxDim);
+            std::vector<OptixProgramGroup> pgs(maxDim);
             OptixProgramGroupOptions opt;
             checkOptixError(optixProgramGroupCreate(
                 helper->getContext(), descs.data(), maxDim, &opt, nullptr,
                 nullptr, pgs.data()));
+            for(auto prog : pgs)
+                mPrograms.emplace_back(prog);
             std::vector<Data> res;
             for(auto&& prog : mPrograms)
-                res.emplace_back(packSBT(prog.get()));
+                res.emplace_back(packEmptySBT(prog.get()));
             return res;
         }
         BUS_TRACE_END();
@@ -217,7 +254,9 @@ public:
 class Instance final : public Bus::ModuleInstance {
 public:
     Instance(const fs::path& path, Bus::ModuleSystem& sys)
-        : Bus::ModuleInstance(path, sys) {}
+        : Bus::ModuleInstance(path, sys) {
+        optixInit();
+    }
     Bus::ModuleInfo info() const override {
         Bus::ModuleInfo res;
         res.name = "Piper.BuiltinSampler.Halton";

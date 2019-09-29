@@ -7,4 +7,7 @@
   <ItemGroup>
     <CustomBuild Include="..\..\..\Src\Integrators\PathTracer\PathKernel.cu" />
   </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="..\..\..\Src\Integrators\PathTracer\DataDesc.hpp" />
+  </ItemGroup>
 </Project>

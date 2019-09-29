@@ -2,10 +2,11 @@
 #include <fstream>
 #pragma warning(push, 0)
 #include <lz4.h>
-#include <optixu/optixu_math_stream.h>
 #pragma warning(pop)
 
 // TODO:Stream Reading
+
+BUS_MODULE_NAME("Piper.BuiltinGeometry.TriMesh");
 
 template <typename T>
 void read(const std::vector<char>& stream, uint64_t& offset, T* ptr,
@@ -15,10 +16,8 @@ void read(const std::vector<char>& stream, uint64_t& offset, T* ptr,
     offset += rsiz;
 }
 
-extern const char* moduleName;
-
 std::vector<char> loadLZ4(const fs::path& path) {
-    BUS_TRACE_BEGIN(moduleName) {
+    BUS_TRACE_BEG() {
         std::ifstream in(path, std::ios::binary);
         ASSERT(in, "Failed to load LZ4 binary " + path.string());
         in.seekg(0, std::ios::end);
@@ -42,56 +41,47 @@ std::vector<char> loadLZ4(const fs::path& path) {
     BUS_TRACE_END();
 }
 
-void load(const fs::path& path, optix::Buffer vertexBuf, optix::Buffer indexBuf,
-          optix::Buffer normal, optix::Buffer texCoord, const SRT& trans,
-          bool doTrans) {
-    BUS_TRACE_BEGIN(moduleName) {
+void load(CUstream stream, const fs::path& path, uint64_t& vertexSize,
+          uint64_t& indexSize, Buffer& vertexBuf, Buffer& indexBuf,
+          Buffer& normalBuf, Buffer& texCoordBuf) {
+    BUS_TRACE_BEG() {
         std::vector<char> data = loadLZ4(path);
         ASSERT(std::string(data.data(), data.data() + 4) == "mesh",
                "Bad mesh header.");
         uint64_t offset = 4;  // mesh
-        uint64_t vertexSize;
         uint32_t flag = 0;
         read(data, offset, &vertexSize);
         read(data, offset, &flag);
         {
-            vertexBuf->setSize(vertexSize);
-            vertexBuf->setFormat(RT_FORMAT_FLOAT3);
-            BufferMapGuard guard(vertexBuf, RT_BUFFER_MAP_WRITE_DISCARD);
-            read(data, offset, guard.as<Vec3>(), vertexSize);
-            if(doTrans) {
-                Mat3 mat = optix::make_matrix3x3(trans.getPointTrans());
-                Vec3* ptr = guard.as<Vec3>();
-                for(uint64_t i = 0; i < vertexSize; ++i)
-                    ptr[i] = mat * ptr[i] + trans.trans;
-            }
+            size_t siz = vertexSize * sizeof(Vec3);
+            vertexBuf = allocBuffer(siz);
+            checkCudaError(cuMemcpyHtoDAsync(
+                asPtr(vertexBuf), data.data() + offset, siz, stream));
+            offset += siz;
         }
-        normal->setFormat(RT_FORMAT_FLOAT3);
+        // Normal
         if(flag & 1) {
-            normal->setSize(vertexSize);
-            BufferMapGuard guard(normal, RT_BUFFER_MAP_WRITE_DISCARD);
-            read(data, offset, guard.as<Vec3>(), vertexSize);
-            if(doTrans) {
-                Mat3 mat = optix::make_matrix3x3(
-                    trans.getPointTrans().inverse().transpose());
-                Vec3* ptr = guard.as<Vec3>();
-                for(uint64_t i = 0; i < vertexSize; ++i)
-                    ptr[i] = mat * ptr[i];
-            }
+            size_t siz = vertexSize * sizeof(Vec3);
+            normalBuf = allocBuffer(siz);
+            checkCudaError(cuMemcpyHtoDAsync(
+                asPtr(normalBuf), data.data() + offset, siz, stream));
+            offset += siz;
         }
-        texCoord->setFormat(RT_FORMAT_FLOAT2);
+        // TexCoord
         if(flag & 2) {
-            texCoord->setSize(vertexSize);
-            BufferMapGuard guard(texCoord, RT_BUFFER_MAP_WRITE_DISCARD);
-            read(data, offset, guard.as<Vec2>(), vertexSize);
+            size_t siz = vertexSize * sizeof(Vec2);
+            texCoordBuf = allocBuffer(siz);
+            checkCudaError(cuMemcpyHtoDAsync(
+                asPtr(texCoordBuf), data.data() + offset, siz, stream));
+            offset += siz;
         }
-        uint64_t indexSize;
         read(data, offset, &indexSize);
         {
-            indexBuf->setSize(indexSize);
-            indexBuf->setFormat(RT_FORMAT_UNSIGNED_INT3);
-            BufferMapGuard guard(indexBuf, RT_BUFFER_MAP_WRITE_DISCARD);
-            read(data, offset, guard.as<uint3>(), indexSize);
+            size_t siz = indexSize * sizeof(uint3);
+            indexBuf = allocBuffer(siz);
+            checkCudaError(cuMemcpyHtoDAsync(
+                asPtr(indexBuf), data.data() + offset, siz, stream));
+            offset += siz;
         }
     }
     BUS_TRACE_END();

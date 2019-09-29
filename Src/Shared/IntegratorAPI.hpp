@@ -1,6 +1,11 @@
 #pragma once
 #include "ConfigAPI.hpp"
 
+struct IntegratorData final {
+    Data sbtData;
+    unsigned maxSampleDim;
+};
+
 class Integrator : public Bus::ModuleFunctionBase {
 protected:
     explicit Integrator(Bus::ModuleInstance& instance)
@@ -11,7 +16,6 @@ public:
         return "Piper.Integrator:1";
     }
 
-    virtual optix::Program init(PluginHelper helper,
-                                std::shared_ptr<Config> config,
-                                const fs::path& cameraPTX) = 0;
+    virtual IntegratorData init(PluginHelper helper,
+                                std::shared_ptr<Config> config) = 0;
 };

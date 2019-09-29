@@ -1,23 +1,20 @@
 #include "../../Shared/KernelShared.hpp"
+#include "DataDesc.hpp"
 
-rtDeclareVariable(float3, cameraBase, , );
-rtDeclareVariable(float3, cameraDown, , );
-rtDeclareVariable(float3, cameraRight, , );
-rtDeclareVariable(float3, cameraHole, , );
-rtDeclareVariable(float3, cameraFStopX, , );
-rtDeclareVariable(float3, cameraFStopY, , );
-rtDeclareVariable(float, cameraFocal, , );
-rtDeclareVariable(float3, cameraAxis, , );
-
-DEVICE void sampleRay(uint2 pixel, RaySample &sample, uint32 &seed) {
+DEVICE RaySample __direct_callable__sampleRay(Uint2 pixel, uint32& seed) {
     ++seed;
-    Vec2 pixelPos = { sample1(seed) + pixel.x, sample2(seed) + pixel.y };
-    Vec3 ori = cameraBase + cameraRight * pixelPos.x + cameraDown * pixelPos.y;
-    Vec3 pinHoleDir = cameraHole - ori;
-    Vec3 focalPoint = ori + pinHoleDir * (cameraFocal / dot(cameraAxis, pinHoleDir));
-    float angle = twoPi * sample3(seed);
-    float radius = sqrtf(sample4(seed));
-    sample.ori = cameraHole + radius * cosf(angle) * cameraFStopX +
-        radius * sinf(angle) * cameraFStopY;
-    sample.dir = normalize(focalPoint - sample.ori);
+    Vec2 pixelPos = { sample<0>(seed) + pixel.x, sample<1>(seed) + pixel.y };
+    const KernelData* data =
+        reinterpret_cast<KernelData*>(optixGetSbtDataPointer());
+    Vec3 ori = data->base + data->right * pixelPos.x + data->down * pixelPos.y;
+    Vec3 pinHoleDir = data->hole - ori;
+    Vec3 focalPoint =
+        ori + pinHoleDir * (data->focal / dot(data->axis, pinHoleDir));
+    float angle = glm::two_pi<float>() * sample<2>(seed);
+    float radius = sqrtf(sample<3>(seed));
+    RaySample res;
+    res.ori = data->hole + radius * cosf(angle) * data->fStopX +
+        radius * sinf(angle) * data->fStopY;
+    res.dir = normalize(focalPoint - res.ori);
+    return res;
 }

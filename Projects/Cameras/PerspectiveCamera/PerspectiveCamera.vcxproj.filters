@@ -7,4 +7,7 @@
   <ItemGroup>
     <CustomBuild Include="..\..\..\Src\Cameras\PerspectiveCamera\RayGen.cu" />
   </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="..\..\..\Src\Cameras\PerspectiveCamera\DataDesc.hpp" />
+  </ItemGroup>
 </Project>

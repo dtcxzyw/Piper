@@ -1,5 +1,15 @@
 #pragma once
 #include "ConfigAPI.hpp"
+#include <functional>
+
+class DriverHelperAPI : private Unmoveable {
+public:
+    virtual void
+    doRender(Uint2 size,
+             const std::function<void(OptixShaderBindingTable&)>& callBack) = 0;
+    virtual CUstream getStream() const = 0;
+};
+using DriverHelper = DriverHelperAPI*;
 
 class Driver : public Bus::ModuleFunctionBase {
 protected:
@@ -11,6 +21,6 @@ public:
         return "Piper.Driver:1";
     }
 
-    virtual uint2 init(PluginHelper helper, std::shared_ptr<Config> config) = 0;
-    virtual void doRender() = 0;
+    virtual void init(PluginHelper helper, std::shared_ptr<Config> config) = 0;
+    virtual void doRender(DriverHelper helper) = 0;
 };

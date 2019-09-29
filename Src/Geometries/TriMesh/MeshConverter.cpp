@@ -11,7 +11,7 @@
 #include "../../Shared/CommandAPI.hpp"
 
 namespace fs = std::experimental::filesystem;
-extern const char* moduleName;
+BUS_MODULE_NAME("Piper.BuiltinGeometry.TriMesh");
 
 template <typename T>
 void read(const std::vector<char>& stream, uint64_t& offset, T* ptr,
@@ -28,7 +28,7 @@ void write(std::vector<char>& stream, const T* ptr, const size_t size = 1) {
 }
 
 void saveLZ4(const fs::path& path, const std::vector<char>& data) {
-    BUS_TRACE_BEGIN(moduleName) {
+    BUS_TRACE_BEG() {
         std::ofstream out(path, std::ios::binary);
         ASSERT(out, "Failed to save LZ4 binary");
         const uint64_t srcSize = data.size();
@@ -43,7 +43,7 @@ void saveLZ4(const fs::path& path, const std::vector<char>& data) {
 }
 
 int cast(int argc, char** argv, Bus::Reporter& reporter) {
-    BUS_TRACE_BEGIN(moduleName) {
+    BUS_TRACE_BEG() {
         cxxopts::Options opt("MeshConverter", "TriMesh::MeshConverter");
         opt.add_options()("t,tool", "", cxxopts::value<std::string>())(
             "i,input", "mesh file path", cxxopts::value<fs::path>())(
@@ -51,9 +51,8 @@ int cast(int argc, char** argv, Bus::Reporter& reporter) {
         auto res = opt.parse(argc, argv);
         if(!(res.count("input") && res.count("output"))) {
             reporter.apply(ReportLevel::Error, "Need Arguments.",
-                           BUS_SRCLOC(moduleName));
-            reporter.apply(ReportLevel::Info, opt.help(),
-                           BUS_SRCLOC(moduleName));
+                           BUS_DEFSRCLOC());
+            reporter.apply(ReportLevel::Info, opt.help(), BUS_DEFSRCLOC());
             return EXIT_FAILURE;
         }
         auto in = res["input"].as<fs::path>();
@@ -61,7 +60,7 @@ int cast(int argc, char** argv, Bus::Reporter& reporter) {
         reporter.apply(ReportLevel::Info,
                        fs::absolute(in).string() + "->" +
                            fs::absolute(out).string(),
-                       BUS_SRCLOC(moduleName));
+                       BUS_DEFSRCLOC());
         Assimp::Importer importer;
         const auto scene = importer.ReadFile(
             in.string(),
@@ -73,25 +72,23 @@ int cast(int argc, char** argv, Bus::Reporter& reporter) {
             BUS_TRACE_THROW(std::runtime_error("Failed to load the mesh."));
         if(scene->mNumMeshes != 1)
             BUS_TRACE_THROW(std::runtime_error("Need one mesh!!!"));
-        reporter.apply(ReportLevel::Info, "mesh loaded.",
-                       BUS_SRCLOC(moduleName));
+        reporter.apply(ReportLevel::Info, "mesh loaded.", BUS_DEFSRCLOC());
         const auto mesh = scene->mMeshes[0];
         reporter.apply(ReportLevel::Info,
                        std::to_string(mesh->mNumVertices) + " vertices," +
                            std::to_string(mesh->mNumFaces) + " faces.",
-                       BUS_SRCLOC(moduleName));
+                       BUS_DEFSRCLOC());
         const aiVector3D* tangents = mesh->mTangents;
         std::vector<char> data{ 'm', 'e', 's', 'h' };
         uint32_t flag = 0;
         if(mesh->HasNormals()) {
             flag |= 1;
-            reporter.apply(ReportLevel::Info, "Has normals.",
-                           BUS_SRCLOC(moduleName));
+            reporter.apply(ReportLevel::Info, "Has normals.", BUS_DEFSRCLOC());
         }
         if(mesh->HasTextureCoords(0)) {
             flag |= 2;
             reporter.apply(ReportLevel::Info, "Has texCoords.",
-                           BUS_SRCLOC(moduleName));
+                           BUS_DEFSRCLOC());
         }
         const uint64_t vertSize = mesh->mNumVertices;
         write(data, &vertSize);
@@ -115,10 +112,9 @@ int cast(int argc, char** argv, Bus::Reporter& reporter) {
             write(data, buf.data(), buf.size());
         }
         importer.FreeScene();
-        reporter.apply(ReportLevel::Info, "Mesh encoded.",
-                       BUS_SRCLOC(moduleName));
+        reporter.apply(ReportLevel::Info, "Mesh encoded.", BUS_DEFSRCLOC());
         saveLZ4(out, data);
-        reporter.apply(ReportLevel::Info, "Done.", BUS_SRCLOC(moduleName));
+        reporter.apply(ReportLevel::Info, "Done.", BUS_DEFSRCLOC());
         return EXIT_SUCCESS;
     }
     BUS_TRACE_END();

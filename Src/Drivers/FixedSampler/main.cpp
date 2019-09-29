@@ -1,56 +1,103 @@
 #include "../../Shared/DriverAPI.hpp"
+#include "DataDesc.hpp"
 #include <fstream>
 #include <iostream>
 #pragma warning(push, 0)
+#include <optix_function_table_definition.h>
+#include <optix_stubs.h>
 #define OPENEXR_DLL
 #include <OpenEXR/ImfRgbaFile.h>
 #pragma warning(pop)
 
-const char* moduleName = "Piper.BuiltinDriver.FixedSampler";
+BUS_MODULE_NAME("Piper.BuiltinDriver.FixedSampler");
 
 class FixedSampler final : public Driver {
 private:
-    optix::Context mContext;
     fs::path mOutput;
     unsigned mSample, mWidth, mHeight;
     bool mFiltBadColor;
+    Module mModule;
+    ProgramGroup mMissRad, mMissOcc, mRayGen, mException;
 
 public:
     explicit FixedSampler(Bus::ModuleInstance& instance) : Driver(instance) {}
-    uint2 init(PluginHelper helper, std::shared_ptr<Config> config) override {
-        mContext = helper->getContext();
-        mOutput = config->attribute("Output")->asString();
-        mSample = config->attribute("Sample")->asUint();
-        mWidth = config->attribute("Width")->asUint();
-        mHeight = config->attribute("Height")->asUint();
-        mFiltBadColor = config->getBool("FiltBadColor", false);
-        return make_uint2(mWidth, mHeight);
+    void init(PluginHelper helper, std::shared_ptr<Config> config) override {
+        BUS_TRACE_BEG() {
+            mOutput = config->attribute("Output")->asString();
+            mSample = config->attribute("Sample")->asUint();
+            mWidth = config->attribute("Width")->asUint();
+            mHeight = config->attribute("Height")->asUint();
+            mFiltBadColor = config->getBool("FiltBadColor", false);
+            mModule =
+                helper->compileFile(modulePath().parent_path() / "Kernel.ptx");
+            OptixProgramGroupDesc desc[4];
+            desc[0].flags = 0;
+            desc[0].kind = OPTIX_PROGRAM_GROUP_KIND_RAYGEN;
+            desc[0].raygen.entryFunctionName = "__raygen__renderKernel";
+            desc[0].raygen.module = mModule.get();
+            desc[1].flags = 0;
+            desc[1].kind = OPTIX_PROGRAM_GROUP_KIND_EXCEPTION;
+            desc[1].exception.entryFunctionName = "__exception__empty";
+            desc[1].exception.module = mModule.get();
+            desc[2].flags = 0;
+            desc[2].kind = OPTIX_PROGRAM_GROUP_KIND_MISS;
+            desc[2].miss.entryFunctionName = "__miss__rad";
+            desc[2].miss.module = mModule.get();
+            desc[2].flags = 0;
+            desc[2].kind = OPTIX_PROGRAM_GROUP_KIND_MISS;
+            desc[2].miss.entryFunctionName = "__miss__occ";
+            desc[2].miss.module = mModule.get();
+            OptixProgramGroup groups[4];
+            OptixProgramGroupOptions opt;
+            checkOptixError(optixProgramGroupCreate(
+                helper->getContext(), desc, 4, &opt, nullptr, nullptr, groups));
+            mRayGen.reset(groups[0]);
+            mException.reset(groups[1]);
+            mMissRad.reset(groups[2]);
+            mMissOcc.reset(groups[3]);
+        }
+        BUS_TRACE_END();
     }
-    void doRender() override {
-        BUS_TRACE_BEGIN(moduleName) {
-            optix::Buffer outputBuffer = mContext->createBuffer(
-                RT_BUFFER_INPUT_OUTPUT, RT_FORMAT_FLOAT4, mWidth, mHeight);
-            {
-                BufferMapGuard guard(outputBuffer, RT_BUFFER_MAP_WRITE_DISCARD);
-                memset(guard.raw(), 0, sizeof(float4) * mWidth * mHeight);
-            }
-            outputBuffer->validate();
-            mContext["driverOutputBuffer"]->set(outputBuffer);
-            mContext["driverBegin"]->setUint(make_uint2(0));
-            mContext["driverFiltBadColor"]->setInt(mFiltBadColor);
+    void doRender(DriverHelper helper) override {
+        BUS_TRACE_BEG() {
+            DriverData data;
+            data.filtBadColor = mFiltBadColor;
+            data.height = mHeight;
+            data.width = mWidth;
+            Buffer output = allocBuffer(sizeof(Vec4) * mWidth * mHeight);
+            checkCudaError(
+                cuMemsetD8(asPtr(output), 0, sizeof(Vec4) * mWidth * mHeight));
+            data.outputBuffer = static_cast<Vec4*>(output.get());
             for(unsigned i = 0; i < mSample; ++i) {
-                mContext["driverLaunchIndex"]->setUint(i);
-                mContext->validate();
-                mContext->launch(0, mWidth, mHeight);
-                std::cout.precision(2);
-                std::cout << std::fixed
-                          << "Process:" << (i + 1) * 100.0 / mSample << "%"
-                          << std::endl;
+                data.sampleIdx = i;
+                Buffer rayGenSBT = uploadData(helper->getStream(),
+                                              packSBT(mRayGen.get(), data));
+                Buffer exceptionSBT = uploadData(
+                    helper->getStream(), packEmptySBT(mException.get()));
+                Data missRadSBT = packEmptySBT(mMissRad.get());
+                Data missOccSBT = packEmptySBT(mMissOcc.get());
+                Data merge = missRadSBT;
+                merge.insert(merge.end(), missOccSBT.begin(), missOccSBT.end());
+                Buffer missSBT = uploadData(helper->getStream(), merge);
+                helper->doRender(
+                    { mWidth, mHeight }, [&](OptixShaderBindingTable& table) {
+                        table.exceptionRecord = asPtr(exceptionSBT);
+                        table.raygenRecord = asPtr(rayGenSBT);
+                        table.missRecordCount = 2;
+                        table.missRecordBase = asPtr(missSBT);
+                        table.missRecordStrideInBytes =
+                            OPTIX_SBT_RECORD_HEADER_SIZE;
+                    });
+                std::stringstream ss;
+                ss.precision(2);
+                ss << std::fixed << "Process:" << (i + 1) * 100.0 / mSample
+                   << "%" << std::endl;
+                reporter().apply(ReportLevel::Info, ss.str(), BUS_DEFSRCLOC());
             }
             {
+                std::vector<Vec4> arr =
+                    downloadData<Vec4>(output, 0, mWidth * mHeight);
                 unsigned size = mWidth * mHeight;
-                BufferMapGuard guard(outputBuffer, RT_BUFFER_MAP_READ);
-                float4* arr = guard.as<float4>();
                 std::vector<Imf::Rgba> rgba(mWidth * mHeight);
                 bool badColor = false;
                 for(unsigned i = 0; i < size; ++i) {
@@ -87,10 +134,12 @@ public:
 class Instance final : public Bus::ModuleInstance {
 public:
     Instance(const fs::path& path, Bus::ModuleSystem& sys)
-        : Bus::ModuleInstance(path, sys) {}
+        : Bus::ModuleInstance(path, sys) {
+        checkOptixError(optixInit());
+    }
     Bus::ModuleInfo info() const override {
         Bus::ModuleInfo res;
-        res.name = moduleName;
+        res.name = BUS_DEFAULT_MODULE_NAME;
         res.guid = Bus::str2GUID("{1ED1289A-88C7-4426-848D-26166A602F59}");
         res.busVersion = BUS_VERSION;
         res.version = "0.0.1";

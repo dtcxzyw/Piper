@@ -1,6 +1,7 @@
 #pragma once
 #pragma warning(push, 0)
 #include "../ThirdParty/glm/glm/glm.hpp"
+#include "../ThirdParty/glm/glm/gtc/constants.hpp"
 #include "../ThirdParty/glm/glm/gtc/quaternion.hpp"
 #include <optix.h>
 #pragma warning(pop)
@@ -33,13 +34,7 @@ enum class BxDFType {
     All = 31
 };
 
-enum class SBTSlot {
-    generateRay,
-    samplePixel,
-    sampleOneLight,
-    calcPayload,
-    userOffset
-};
+enum class SBTSlot { generateRay, samplePixel, sampleOneLight, userOffset };
 
 struct SRT final {
     Vec3 scale;
@@ -53,4 +48,5 @@ struct SRT final {
 
 struct LaunchParam final {
     unsigned samplerSbtOffset, lightSbtOffset;
+    OptixTraversableHandle root;
 };

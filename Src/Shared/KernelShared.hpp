@@ -20,13 +20,13 @@ constexpr unsigned traceSBTStride = 2;
 
 using uint32 = unsigned int;
 
-DEVICE uint32 initSeed(uint32 index, uint32 mask);
-DEVICE float sample1(uint32 idx);
-DEVICE float sample2(uint32 idx);
-DEVICE float sample3(uint32 idx);
-DEVICE float sample4(uint32 idx);
-DEVICE float sample5(uint32 idx);
-DEVICE float sample6(uint32 idx);
+extern "C" __constant__ LaunchParam launchParam;
+
+template <unsigned dim>
+INLINEDEVICE float sample(unsigned idx) {
+    return optixDirectCall<float, unsigned>(launchParam.samplerSbtOffset + dim,
+                                            idx);
+}
 
 INLINEDEVICE float3 v2f(const Vec3& v) {
     return make_float3(v.x, v.y, v.z);
@@ -120,37 +120,27 @@ INLINEDEVICE Vec3 sqrtf(const Vec3& a) {
     return { sqrtf(a.x), sqrtf(a.y), sqrtf(a.z) };
 }
 
-#define black            \
-    Spectrum {           \
-        0.0f, 0.0f, 0.0f \
-    }
-
 struct RaySample final {
-    Vec3 ori;
-    Vec3 dir;
+    Vec3 ori, dir;
 };
 
-class Light;
-DEVICE LightSample sampleOneLight(const Vec3& ori, float u);
-
-/*
-struct ShadingSpace final {
-    optix::Onb base;
-    Vec3 wo;
-    DEVICE ShadingSpace(const Vec3& normal) : base(normal) {}
-    DEVICE Vec3 toLocal(const Vec3& dir) const {
-        return make_float3(dot(dir, base.m_tangent), dot(dir, base.m_binormal),
-                           dot(dir, base.m_normal));
-    }
-};
+struct Attribute final {};
 
 struct Payload final {
-    Vec3 ori;
-    Vec3 wi;
+    Attribute attr;
+    Vec3 ori, wi;
     Spectrum f, rad;
     uint32 index;
     bool hit;
 };
 
-DEVICE ShadingSpace calcPayload(Payload& payload);
-*/
+INLINEDEVICE void* unpackPointer(uint32_t i0, uint32_t i1) {
+    const uint64_t uptr = static_cast<uint64_t>(i0) << 32 | i1;
+    return reinterpret_cast<void*>(uptr);
+}
+
+INLINEDEVICE void packPointer(void* ptr, uint32_t& i0, uint32_t& i1) {
+    const uint64_t uptr = reinterpret_cast<uint64_t>(ptr);
+    i0 = uptr >> 32;
+    i1 = uptr & 0x00000000ffffffff;
+}

@@ -21,7 +21,8 @@ public:
             data.lum = cfg->attribute("Lum")->asVec3();
             data.direction = normalize(cfg->attribute("Direction")->asVec3());
             data.distance = cfg->attribute("Distance")->asFloat() - (1e-8f);
-            mProg = helper->compileFile(modulePath() / "DirLight.ptx");
+            mProg = helper->compileFile(modulePath().parent_path() /
+                                        "DirLight.ptx");
             OptixProgramGroupDesc desc = {};
             desc.kind = OPTIX_PROGRAM_GROUP_KIND_CALLABLES;
             desc.callables.moduleCC = mProg.get();
@@ -54,7 +55,7 @@ public:
     }
     Bus::ModuleInfo info() const override {
         Bus::ModuleInfo res;
-        res.name = "Piper.BuiltinLight.SimpleLight";
+        res.name = BUS_DEFAULT_MODULE_NAME;
         res.guid = Bus::str2GUID("{5B55F22A-2BDB-43B6-8EED-0CE0FBB49949}");
         res.busVersion = BUS_VERSION;
         res.version = "0.0.1";
