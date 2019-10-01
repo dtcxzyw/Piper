@@ -4,7 +4,7 @@
 #include "../ThirdParty/Bus/BusModule.hpp"
 #include "../ThirdParty/Bus/BusReporter.hpp"
 #include "../ThirdParty/Bus/BusSystem.hpp"
-#include <cuda_runtime.h>
+#include <cuda.h>
 using Bus::ReportLevel;
 #pragma warning(pop)
 #include "OptixHelper.hpp"

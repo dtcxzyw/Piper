@@ -4,6 +4,7 @@
 struct IntegratorData final {
     Data sbtData;
     unsigned maxSampleDim;
+    OptixProgramGroup group;
 };
 
 class Integrator : public Bus::ModuleFunctionBase {

@@ -1,7 +1,7 @@
 #pragma once
 #include "../../Shared/Shared.hpp"
 
-struct DriverData final {
+struct DataDesc final {
     Vec4* outputBuffer;
     unsigned width, height, sampleIdx;
     bool filtBadColor;

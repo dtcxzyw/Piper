@@ -124,10 +124,7 @@ struct RaySample final {
     Vec3 ori, dir;
 };
 
-struct Attribute final {};
-
 struct Payload final {
-    Attribute attr;
     Vec3 ori, wi;
     Spectrum f, rad;
     uint32 index;
@@ -143,4 +140,9 @@ INLINEDEVICE void packPointer(void* ptr, uint32_t& i0, uint32_t& i1) {
     const uint64_t uptr = reinterpret_cast<uint64_t>(ptr);
     i0 = uptr >> 32;
     i1 = uptr & 0x00000000ffffffff;
+}
+
+INLINEDEVICE Payload* getPayload() {
+    return reinterpret_cast<Payload*>(
+        unpackPointer(optixGetPayload_0(), optixGetPayload_1()));
 }

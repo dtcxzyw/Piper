@@ -9,4 +9,7 @@
   <ItemGroup>
     <CustomBuild Include="..\..\..\Src\Geometries\TriMesh\Triangle.cu" />
   </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="..\..\..\Src\Geometries\TriMesh\DataDesc.hpp" />
+  </ItemGroup>
 </Project>

@@ -107,3 +107,32 @@ struct ProgramGroupDeleter final {
 };
 
 using ProgramGroup = std::unique_ptr<OptixProgramGroup_t, ProgramGroupDeleter>;
+
+struct PipelineDeleter final {
+    void operator()(OptixPipeline pipe) const {
+        checkOptixError(optixPipelineDestroy(pipe));
+    }
+};
+
+using Pipeline = std::unique_ptr<OptixPipeline_t, PipelineDeleter>;
+
+inline Buffer uploadSBTRecords(CUstream stream, const std::vector<Data>& data,
+                               CUdeviceptr& ptr, unsigned& stride,
+                               unsigned& count) {
+    BUS_TRACE_BEGIN("Piper.Builtin.OptixHelper") {
+        stride = 0;
+        count = static_cast<unsigned>(data.size());
+        for(auto&& d : data)
+            stride = std::max(stride, static_cast<unsigned>(d.size()));
+        Data base(stride * count);
+        for(unsigned i = 0; i < count; ++i) {
+            memcpy(base.data() + i * stride, data[i].data(), data[i].size());
+        }
+        Buffer buf = allocBuffer(stride * count);
+        ptr = asPtr(buf);
+        checkCudaError(
+            cuMemcpyHtoDAsync(ptr, base.data(), base.size(), stream));
+        return buf;
+    }
+    BUS_TRACE_END();
+}

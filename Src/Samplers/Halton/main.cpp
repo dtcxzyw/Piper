@@ -216,8 +216,8 @@ private:
 
 public:
     explicit Halton(Bus::ModuleInstance& instance) : Sampler(instance) {}
-    std::vector<Data> init(PluginHelper helper, std::shared_ptr<Config> config,
-                           unsigned maxDim) override {
+    SamplerData init(PluginHelper helper, std::shared_ptr<Config> config,
+                     unsigned maxDim) override {
         BUS_TRACE_BEG() {
             std::string src = generateSoruce(maxDim, config, reporter());
             reporter().apply(ReportLevel::Debug, "Source:\n" + src,
@@ -242,9 +242,10 @@ public:
                 nullptr, pgs.data()));
             for(auto prog : pgs)
                 mPrograms.emplace_back(prog);
-            std::vector<Data> res;
+            SamplerData res;
             for(auto&& prog : mPrograms)
-                res.emplace_back(packEmptySBT(prog.get()));
+                res.sbtData.emplace_back(packEmptySBT(prog.get()));
+            res.group = pgs;
             return res;
         }
         BUS_TRACE_END();

@@ -37,6 +37,7 @@ public:
             LightData res;
             res.sbtData = packSBT(mProgramGroup.get(), data);
             res.maxSampleDim = 0;
+            res.group = mProgramGroup.get();
             return res;
         }
         BUS_TRACE_END();

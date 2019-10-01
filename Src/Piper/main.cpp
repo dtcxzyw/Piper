@@ -2,8 +2,6 @@
 #include "../Shared/ConfigAPI.hpp"
 #pragma warning(push, 0)
 #include "../ThirdParty/Bus/BusSystem.hpp"
-#include <optix_function_table_definition.h>
-#include <optix_stubs.h>
 #include <rang.hpp>
 #pragma warning(pop)
 #include <sstream>

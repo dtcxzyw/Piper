@@ -104,9 +104,9 @@ int cast(int argc, char** argv, Bus::Reporter& reporter) {
             write(data, texCoords.data(), vertSize);
         }
         {
-            std::vector<uint3> buf(mesh->mNumFaces);
+            std::vector<Uint3> buf(mesh->mNumFaces);
             for(auto i = 0U; i < mesh->mNumFaces; ++i)
-                buf[i] = *reinterpret_cast<uint3*>(mesh->mFaces[i].mIndices);
+                buf[i] = *reinterpret_cast<Uint3*>(mesh->mFaces[i].mIndices);
             const uint64_t faceSize = mesh->mNumFaces;
             write(data, &faceSize);
             write(data, buf.data(), buf.size());

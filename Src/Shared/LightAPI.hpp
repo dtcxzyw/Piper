@@ -4,6 +4,7 @@
 struct LightData final {
     Data sbtData;
     unsigned maxSampleDim;
+    OptixProgramGroup group;
 };
 
 class Light : public Bus::ModuleFunctionBase {

@@ -2,9 +2,10 @@
 #include "ConfigAPI.hpp"
 
 struct GeometryData final {
-    Data sbtData;
+    Data radSBTData, occSBTData;
     unsigned maxSampleDim;
     OptixTraversableHandle handle;
+    std::vector<OptixProgramGroup> group;
 };
 
 class Geometry : public Bus::ModuleFunctionBase {
@@ -18,6 +19,5 @@ public:
     }
 
     virtual GeometryData init(PluginHelper helper,
-                              std::shared_ptr<Config> config,
-                              uint32_t& hitGroupOffset) = 0;
+                              std::shared_ptr<Config> config) = 0;
 };

@@ -37,6 +37,7 @@ public:
             IntegratorData res;
             res.sbtData = packSBT(mGroup.get(), data);
             res.maxSampleDim = 0;
+            res.group = mGroup.get();
             return res;
         }
         BUS_TRACE_END();

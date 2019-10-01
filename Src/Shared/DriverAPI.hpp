@@ -11,6 +11,10 @@ public:
 };
 using DriverHelper = DriverHelperAPI*;
 
+struct DriverData final {
+    std::vector<OptixProgramGroup> group;
+};
+
 class Driver : public Bus::ModuleFunctionBase {
 protected:
     explicit Driver(Bus::ModuleInstance& instance)
@@ -21,6 +25,7 @@ public:
         return "Piper.Driver:1";
     }
 
-    virtual void init(PluginHelper helper, std::shared_ptr<Config> config) = 0;
+    virtual DriverData init(PluginHelper helper,
+                            std::shared_ptr<Config> config) = 0;
     virtual void doRender(DriverHelper helper) = 0;
 };

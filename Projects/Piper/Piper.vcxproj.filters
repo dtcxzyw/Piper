@@ -65,6 +65,6 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <CustomBuild Include="..\..\Src\Piper\Default.cu" />
+    <None Include="..\..\Src\Piper\Default.cu" />
   </ItemGroup>
 </Project>

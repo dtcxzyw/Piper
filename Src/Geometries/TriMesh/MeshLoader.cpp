@@ -77,7 +77,7 @@ void load(CUstream stream, const fs::path& path, uint64_t& vertexSize,
         }
         read(data, offset, &indexSize);
         {
-            size_t siz = indexSize * sizeof(uint3);
+            size_t siz = indexSize * sizeof(Uint3);
             indexBuf = allocBuffer(siz);
             checkCudaError(cuMemcpyHtoDAsync(
                 asPtr(indexBuf), data.data() + offset, siz, stream));

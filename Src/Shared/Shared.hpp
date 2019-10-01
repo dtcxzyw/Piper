@@ -14,6 +14,7 @@ using Mat3 = glm::mat3;
 using Quat = glm::quat;
 using Uint2 = glm::uvec2;
 using Spectrum = Vec3;
+using Uint3 = glm::uvec3;
 
 struct LightSample final {
     Vec3 wi;
@@ -34,7 +35,12 @@ enum class BxDFType {
     All = 31
 };
 
-enum class SBTSlot { generateRay, samplePixel, sampleOneLight, userOffset };
+enum class SBTSlot : unsigned {
+    generateRay,
+    samplePixel,
+    // sampleOneLight,
+    userOffset
+};
 
 struct SRT final {
     Vec3 scale;

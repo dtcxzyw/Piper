@@ -1,5 +1,10 @@
 #include "../../Shared/CommandAPI.hpp"
 #include "../../Shared/GeometryAPI.hpp"
+#include "DataDesc.hpp"
+#pragma warning(push, 0)
+#include <optix_function_table_definition.h>
+#include <optix_stubs.h>
+#pragma warning(pop)
 
 void load(CUstream stream, const fs::path& path, uint64_t& vertexSize,
           uint64_t& indexSize, Buffer& vertexBuf, Buffer& indexBuf,
@@ -11,51 +16,102 @@ BUS_MODULE_NAME("Piper.BuiltinGeometry.TriMesh");
 
 class TriMesh final : public Geometry {
 private:
-    Buffer mVertex, mIndex, mNormal, mTexCoord, mMat, mAccel;
-    bool mBuiltinTriAPI;
+    Buffer mVertex, mIndex, mNormal, mTexCoord, mAccel;
     Module mModule;
+    ProgramGroup mRadGroup, mOccGroup;
 
 public:
     explicit TriMesh(Bus::ModuleInstance& instance) : Geometry(instance) {}
-    GeometryData init(PluginHelper helper, std::shared_ptr<Config> config,
-                      uint32_t& hitGroupOffset) override {
+    GeometryData init(PluginHelper helper,
+                      std::shared_ptr<Config> config) override {
         BUS_TRACE_BEG() {
-            mBuiltinTriAPI = config->getBool("BuiltinTriangleAPI", false);
+            bool builtinTriAPI = config->getBool("BuiltinTriangleAPI", false);
             fs::path path =
                 helper->scenePath() / config->attribute("Path")->asString();
             SRT srt = config->getTransform("Transform");
             uint64_t vertexSize, indexSize;
-            load(0, path, vertexSize, indexSize, mVertex, mIndex, mNormal,
+            CUstream stream = 0;
+            load(stream, path, vertexSize, indexSize, mVertex, mIndex, mNormal,
                  mTexCoord);
             auto mp = modulePath().parent_path();
-            if(mBuiltinTriAPI) {
+            if(builtinTriAPI) {
                 OptixAccelBuildOptions opt;
                 opt.operation = OPTIX_BUILD_OPERATION_BUILD;
                 opt.buildFlags = OPTIX_BUILD_FLAG_NONE;
-                opt.motionOptions.numKeys = 0;
+                opt.motionOptions.numKeys = 1;
                 opt.motionOptions.flags = OPTIX_MOTION_FLAG_NONE;
                 opt.motionOptions.timeBegin = opt.motionOptions.timeEnd = 0.0f;
 
                 OptixBuildInput input;
                 input.type = OPTIX_BUILD_INPUT_TYPE_TRIANGLES;
                 OptixBuildInputTriangleArray& arr = input.triangleArray;
-                OptixGeometryFlags flag = OPTIX_GEOMETRY_FLAG_NONE;
+                unsigned flag = OPTIX_GEOMETRY_FLAG_NONE;
                 arr.flags = &flag;
                 arr.indexBuffer = asPtr(mIndex);
                 arr.indexFormat = OPTIX_INDICES_FORMAT_UNSIGNED_INT3;
-                arr.indexStrideInBytes = sizeof(uint3);
+                arr.indexStrideInBytes = sizeof(Uint3);
                 arr.numIndexTriplets = 0;
                 arr.numSbtRecords = 1;
-                arr.numVertices = vertexSize;
-                arr.preTransform = ;
+                arr.numVertices = static_cast<unsigned>(vertexSize);
+                arr.preTransform = 0;  //!!!
                 arr.primitiveIndexOffset = 0;
-                arr.sbtIndexOffsetBuffer = ;
-                arr.sbtIndexOffsetSizeInBytes = ;
-                arr.sbtIndexOffsetStrideInBytes = ;
-                arr.vertexBuffers = asPtr(mVertex);
+                //!!!
+                arr.sbtIndexOffsetBuffer = 0;
+                arr.sbtIndexOffsetSizeInBytes = 0;
+                arr.sbtIndexOffsetStrideInBytes = 0;
+                CUdeviceptr ptr = asPtr(mVertex);
+                arr.vertexBuffers = &ptr;
                 arr.vertexFormat = OPTIX_VERTEX_FORMAT_FLOAT3;
                 arr.vertexStrideInBytes = sizeof(Vec3);
 
+                OptixAccelBufferSizes siz;
+                checkOptixError(optixAccelComputeMemoryUsage(
+                    helper->getContext(), &opt, &input, 1, &siz));
+
+                Buffer tmp = allocBuffer(siz.tempSizeInBytes);
+                mAccel = allocBuffer(siz.outputSizeInBytes);
+
+                GeometryData res;
+                res.maxSampleDim = 0;
+
+                checkOptixError(optixAccelBuild(
+                    helper->getContext(), stream, &opt, &input, 1, asPtr(tmp),
+                    siz.tempSizeInBytes, asPtr(mAccel), siz.outputSizeInBytes,
+                    &res.handle, nullptr, 0));
+
+                checkCudaError(cuStreamSynchronize(stream));
+                tmp.reset(nullptr);
+
+                mModule = helper->compileFile(modulePath().parent_path() /
+                                              "Triangle.ptx");
+                OptixProgramGroupDesc desc[2];
+                desc[0].flags = desc[1].flags = 0;
+                desc[0].kind = desc[1].kind = OPTIX_PROGRAM_GROUP_KIND_HITGROUP;
+                OptixProgramGroupHitgroup& hit0 = desc[0].hitgroup;
+                hit0.moduleAH = mModule.get();
+                hit0.entryFunctionNameCH = "__closesthit__RCH";
+                OptixProgramGroupHitgroup& hit1 = desc[1].hitgroup;
+                hit1.moduleAH = mModule.get();
+                hit1.entryFunctionNameAH = "__anyhit__OAH";
+                OptixProgramGroupOptions gopt;
+                OptixProgramGroup group[2];
+                checkOptixError(optixProgramGroupCreate(helper->getContext(),
+                                                        desc, 2, &gopt, nullptr,
+                                                        nullptr, group));
+                mRadGroup.reset(group[0]);
+                mOccGroup.reset(group[1]);
+
+                DataDesc data;
+                data.vertex = static_cast<Vec3*>(mVertex.get());
+                data.index = static_cast<Uint3*>(mIndex.get());
+                data.normal = static_cast<Vec3*>(mNormal.get());
+                data.texCoord = static_cast<Vec2*>(mTexCoord.get());
+
+                res.radSBTData = packSBT(mRadGroup.get(), data);
+                res.occSBTData = packSBT(mOccGroup.get(), data);
+                res.group.assign(group, group + 2);
+                return res;
+                // TODO:Compaction,Material
             } else {
                 BUS_TRACE_THROW(std::logic_error("unimplemented feature"));
             }

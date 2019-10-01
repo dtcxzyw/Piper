@@ -4,6 +4,7 @@
 #include <sstream>
 #pragma warning(push, 0)
 #include <nvrtc.h>
+#include <optix_stubs.h>
 #pragma warning(pop)
 
 BUS_MODULE_NAME("Piper.Builtin.PluginHelper");
@@ -62,7 +63,7 @@ std::unique_ptr<PluginHelperAPI>
 buildPluginHelper(OptixDeviceContext context, const fs::path& scenePath,
                   bool debug, const OptixModuleCompileOptions& MCO,
                   const OptixPipelineCompileOptions& PCO) {
-    return std::unique_ptr<PluginHelperImpl>(context, scenePath, debug, MCO,
+    return std::make_unique<PluginHelperImpl>(context, scenePath, debug, MCO,
                                               PCO);
 }
 

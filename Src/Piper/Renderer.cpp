@@ -5,8 +5,13 @@
 #include "../Shared/IntegratorAPI.hpp"
 #include "../Shared/LightAPI.hpp"
 #include "../Shared/MaterialAPI.hpp"
+#include "../Shared/SamplerAPI.hpp"
 #include "CameraAdapter.hpp"
-#include <any>
+#pragma warning(push, 0)
+#define NOMINMAX
+#include <optix_function_table_definition.h>
+#include <optix_stubs.h>
+#pragma warning(pop)
 
 std::unique_ptr<PluginHelperAPI>
 buildPluginHelper(OptixDeviceContext context, const fs::path& scenePath,
@@ -39,7 +44,7 @@ void logCallBack(unsigned int lev, const char* tag, const char* message,
 }
 
 struct CUDAContextDeleter final {
-    void operator()(CUcontext*) const {
+    void operator()(CUcontext) const {
         CUdevice dev;
         checkCudaError(cuCtxGetDevice(&dev));
         checkCudaError(cuDevicePrimaryCtxRelease(dev));
@@ -57,10 +62,11 @@ CUDAContext createCUDAContext(Bus::Reporter& reporter) {
                            "." + std::to_string(drver % 1000 / 10),
                        BUS_DEFSRCLOC());
         CUdevice dev;
-        checkCudaError(cuDeviceGet(device, 0));
+        checkCudaError(cuDeviceGet(&dev, 0));
         char buf[256];
         checkCudaError(cuDeviceGetName(buf, sizeof(buf), dev));
-        reporter.apply(ReportLevel::Info, "use device " + buf, BUS_DEFSRCLOC());
+        reporter.apply(ReportLevel::Info, std::string("use device ") + buf,
+                       BUS_DEFSRCLOC());
         CUcontext ctx;
         checkCudaError(cuDevicePrimaryCtxRetain(&ctx, dev));
         return CUDAContext{ ctx };
@@ -96,7 +102,8 @@ Context createContext(CUcontext ctx, Bus::Reporter& reporter,
             context, OptixDeviceProperty::OPTIX_DEVICE_PROPERTY_RTCORE_VERSION,
             &rtver, sizeof(rtver)));
         reporter.apply(ReportLevel::Info,
-                       "RTCore Version:" + std::to_string(rtver),
+                       "RTCore Version:" + std::to_string(rtver / 10) + '.' +
+                           std::to_string(rtver % 10),
                        BUS_DEFSRCLOC());
         return Context{ context };
     }
@@ -105,6 +112,8 @@ Context createContext(CUcontext ctx, Bus::Reporter& reporter,
 
 std::shared_ptr<Config> loadScene(Bus::ModuleSystem& sys,
                                   const fs::path& path) {
+    sys.getReporter().apply(Bus::ReportLevel::Info, "Loading scene",
+                            BUS_DEFSRCLOC());
     for(auto id : sys.list<Config>()) {
         std::shared_ptr<Config> config = sys.instantiate<Config>(id);
         if(config->load(path))
@@ -113,77 +122,36 @@ std::shared_ptr<Config> loadScene(Bus::ModuleSystem& sys,
     return nullptr;
 }
 
-using MaterialLib = std::map<std::string, std::shared_ptr<Material>>;
-
-MaterialLib loadMaterials(std::shared_ptr<Config> config, PluginHelper helper,
-                          Bus::ModuleSystem& sys) {
-    BUS_TRACE_BEG() {
-        MaterialLib res;
-        for(auto cfg : config->expand()) {
-            std::string name = cfg->attribute("Name")->asString();
-            if(res.count(name)) {
-                BUS_TRACE_THROW(std::logic_error("Material \"" + name +
-                                                 "\" has been defined."));
-            } else {
-                auto mat = sys.instantiateByName<Material>(
-                    cfg->attribute("Plugin")->asString());
-                mat->init(helper, cfg);
-                res.emplace(name, mat);
-            }
-        }
-        return res;
-    }
-    BUS_TRACE_END();
-}
-
-using LightLib = std::map<std::string, LightProgram>;
-
-LightLib loadLights(std::shared_ptr<Config> config, PluginHelper helper,
-                    std::vector<std::shared_ptr<Light>>& lig,
-                    Bus::ModuleSystem& sys) {
-    BUS_TRACE_BEG() {
-        LightLib res;
-        for(auto cfg : config->expand()) {
-            std::string name = cfg->attribute("Name")->asString();
-            if(res.count(name)) {
-                BUS_TRACE_THROW(std::logic_error("Light \"" + name +
-                                                 "\" has been defined."));
-            } else {
-                auto light = sys.instantiateByName<Light>(
-                    cfg->attribute("Plugin")->asString());
-                res.emplace(name, light->init(helper, cfg));
-                lig.emplace_back(light);
-            }
-        }
-        return res;
-    }
-    BUS_TRACE_END();
-}
-
 std::shared_ptr<Integrator> loadIntegrator(std::shared_ptr<Config> config,
                                            PluginHelper helper,
-                                           const fs::path& ptx,
-                                           optix::Program& prog,
-                                           Bus::ModuleSystem& sys) {
+                                           Bus::ModuleSystem& sys,
+                                           IntegratorData& data) {
+    sys.getReporter().apply(Bus::ReportLevel::Info, "Loading integrator",
+                            BUS_DEFSRCLOC());
     auto inte = sys.instantiateByName<Integrator>(
         config->attribute("Plugin")->asString());
-    prog = inte->init(helper, config, ptx);
+    data = inte->init(helper, config);
     return inte;
 }
 
 std::shared_ptr<Driver> loadDriver(std::shared_ptr<Config> config,
-                                   PluginHelper helper, uint2& filmSize,
-                                   Bus::ModuleSystem& sys) {
+                                   PluginHelper helper, Bus::ModuleSystem& sys,
+                                   DriverData& data) {
+    sys.getReporter().apply(Bus::ReportLevel::Info, "Loading driver",
+                            BUS_DEFSRCLOC());
     auto driver =
         sys.instantiateByName<Driver>(config->attribute("Plugin")->asString());
-    filmSize = driver->init(helper, config);
+    data = driver->init(helper, config);
     return driver;
 }
 
 using GeometryLib = std::map<std::string, std::shared_ptr<Geometry>>;
 
 GeometryLib loadGeometries(std::shared_ptr<Config> config, PluginHelper helper,
-                           Bus::ModuleSystem& sys) {
+                           Bus::ModuleSystem& sys,
+                           std::vector<GeometryData>& data) {
+    sys.getReporter().apply(Bus::ReportLevel::Info, "Loading geometries",
+                            BUS_DEFSRCLOC());
     BUS_TRACE_BEG() {
         GeometryLib res;
         for(auto cfg : config->expand()) {
@@ -194,7 +162,7 @@ GeometryLib loadGeometries(std::shared_ptr<Config> config, PluginHelper helper,
             } else {
                 auto geo = sys.instantiateByName<Geometry>(
                     cfg->attribute("Plugin")->asString());
-                geo->init(helper, cfg);
+                data.emplace_back(geo->init(helper, cfg));
                 res.emplace(name, geo);
             }
         }
@@ -203,72 +171,16 @@ GeometryLib loadGeometries(std::shared_ptr<Config> config, PluginHelper helper,
     BUS_TRACE_END();
 }
 
-struct LightInfo final {
-    Mat4 trans;
-    LightProgram prog;
-};
-
-void parseNode(std::shared_ptr<Config> root, const MaterialLib& mat,
-               const LightLib& light, const GeometryLib& geo,
-               std::vector<LightInfo>& lightInst,
-               std::vector<std::any>& content, optix::Group group,
-               optix::Context context);
-
-void parseChildren(std::shared_ptr<Config> root, const MaterialLib& mat,
-                   const LightLib& light, const GeometryLib& geo,
-                   std::vector<LightInfo>& lightInst,
-                   std::vector<std::any>& content, optix::Group group,
-                   optix::Context context) {
-    for(auto child : root->expand())
-        parseNode(child, mat, light, geo, lightInst, content, group, context);
-}
-
-template <typename T>
-T access(const std::map<std::string, T>& lib, const std::string& name) {
-    auto iter = lib.find(name);
-    if(iter == lib.cend())
-        throw std::runtime_error(std::string("No ") + typeid(T).name() +
-                                 " called \"" + name + "\".");
-    return iter->second;
-}
-
-void parseNode(std::shared_ptr<Config> root, const MaterialLib& mat,
-               const LightLib& light, const GeometryLib& geo,
-               std::vector<LightInfo>& lightInst,
-               std::vector<std::any>& content, optix::Group group,
-               optix::Context context) {
-    BUS_TRACE_BEG() {
-        std::string type = root->attribute("Type")->asString();
-        std::string name = root->attribute("Name")->asString();
-        if(type == "Light") {
-            LightInfo info;
-            info.trans = Mat4::identity();
-            info.prog = access(light, name);
-            lightInst.emplace_back(info);
-        } else if(type == "Geometry") {
-            optix::GeometryInstance inst = context->createGeometryInstance();
-            access(geo, name)->setInstance(inst);
-            inst->setMaterialCount(1);
-            inst->setMaterial(
-                0,
-                access(mat, root->attribute("Material")->asString())
-                    ->getMaterial());
-            inst->validate();
-            content.emplace_back(inst);
-            optix::GeometryGroup gg = context->createGeometryGroup();
-            optix::Acceleration acc = context->createAcceleration("Trbvh");
-            gg->setAcceleration(acc);
-            gg->addChild(inst);
-            gg->setVisibilityMask(255);
-            gg->validate();
-            context["globalTopNode"]->set(gg);
-            content.emplace_back(gg);
-            content.emplace_back(acc);
-        } else
-            BUS_TRACE_THROW(
-                std::logic_error("Unrecognized type \"" + type + "\"."));
-    }
-    BUS_TRACE_END();
+std::shared_ptr<Sampler> loadSampler(std::shared_ptr<Config> config,
+                                     PluginHelper helper,
+                                     Bus::ModuleSystem& sys, unsigned msd,
+                                     SamplerData& data) {
+    sys.getReporter().apply(Bus::ReportLevel::Info, "Loading sampler",
+                            BUS_DEFSRCLOC());
+    auto sampler =
+        sys.instantiateByName<Sampler>(config->attribute("Plugin")->asString());
+    data = sampler->init(helper, config, msd);
+    return sampler;
 }
 
 void renderImpl(std::shared_ptr<Config> config, const fs::path& scenePath,
@@ -292,83 +204,117 @@ void renderImpl(std::shared_ptr<Config> config, const fs::path& scenePath,
         PCO.pipelineLaunchParamsVariableName = "launchParam";
         PCO.traversableGraphFlags = OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_ANY;
         PCO.usesMotionBlur = false;
-        PCO.numAttributeValues = PCO.numPayloadValues = 3;
+        PCO.numAttributeValues = 0;
+        PCO.numPayloadValues = 2;
         std::shared_ptr<PluginHelperAPI> helper =
             buildPluginHelper(context.get(), scenePath, debug, MCO, PCO);
         auto& reporter = sys.getReporter();
-        reporter.apply(Bus::ReportLevel::Info, "Loading camera",
-                       BUS_DEFSRCLOC());
-        CameraAdapter camera(config->attribute("Camera"), helper, sys);
-        reporter.apply(Bus::ReportLevel::Info, "Loading materials",
-                       BUS_DEFSRCLOC());
-        MaterialLib materials =
-            loadMaterials(config->attribute("MaterialLib"), helper, sys);
-        reporter.apply(Bus::ReportLevel::Info, "Loading lights",
-                       BUS_DEFSRCLOC());
-        std::vector<std::shared_ptr<Light>> lig;
-        LightLib lights =
-            loadLights(config->attribute("LightLib"), helper, lig, sys);
-        reporter.apply(Bus::ReportLevel::Info, "Configurating lights",
-                       BUS_DEFSRCLOC());
-        std::vector<int> progs;
-        for(auto light : lights)
-            progs.push_back(light.second.prog);
-        for(auto mat : materials) {
-            optix::Program prog =
-                mat.second->getMaterial()->getClosestHitProgram(
-                    radianceRayType);
-            prog->setCallsitePotentialCallees("call_in_sampleOneLight", progs);
-        }
-        reporter.apply(Bus::ReportLevel::Info, "Loading integrator",
-                       BUS_DEFSRCLOC());
-        optix::Program inteProg;
-        std::shared_ptr<Integrator> integrator =
-            loadIntegrator(config->attribute("Integrator"), helper,
-                           camera.getPTX(), inteProg, sys);
-        context->setRayGenerationProgram(0, inteProg);
-        reporter.apply(Bus::ReportLevel::Info, "Loading driver",
-                       BUS_DEFSRCLOC());
-        uint2 filmSize;
+        unsigned msd = 0;
+        std::vector<OptixProgramGroup> groups;
+
+        CameraData cdata;
+        CameraAdapter camera(config->attribute("Camera"), helper.get(), sys,
+                             cdata);
+        groups.emplace_back(cdata.group);
+        msd = std::max(msd, cdata.maxSampleDim);
+
+        IntegratorData idata;
+        std::shared_ptr<Integrator> integrator = loadIntegrator(
+            config->attribute("Integrator"), helper.get(), sys, idata);
+        groups.emplace_back(idata.group);
+        msd = std::max(msd, idata.maxSampleDim);
+
+        DriverData ddata;
         std::shared_ptr<Driver> driver =
-            loadDriver(config->attribute("Driver"), helper, filmSize, sys);
-        camera.prepare(inteProg, filmSize);
-        reporter.apply(Bus::ReportLevel::Info, "Loading geometries",
-                       BUS_DEFSRCLOC());
-        GeometryLib geos =
-            loadGeometries(config->attribute("GeometryLib"), helper, sys);
-        reporter.apply(Bus::ReportLevel::Info, "Loading scene",
-                       BUS_DEFSRCLOC());
-        std::vector<LightInfo> lightInst;
-        std::vector<std::any> content;
-        optix::Group group = context->createGroup();
-        optix::Acceleration acc = context->createAcceleration("Trbvh");
-        group->setAcceleration(acc);
-        group->setVisibilityMask(255);
-        group->validate();
-        context["globalTopNode"]->set(group);
-        parseChildren(config->attribute("Scene"), materials, lights, geos,
-                      lightInst, content, group, context);
-        optix::Buffer lightMat = context->createBuffer(
-            RT_BUFFER_INPUT, RT_FORMAT_USER, lightInst.size());
-        {
-            lightMat->setElementSize(sizeof(Mat4));
-            BufferMapGuard guard(lightMat, RT_BUFFER_MAP_WRITE_DISCARD);
-            for(size_t i = 0; i < lightInst.size(); ++i)
-                guard.as<Mat4>()[i] = lightInst[i].trans;
+            loadDriver(config->attribute("Driver"), helper.get(), sys, ddata);
+        groups.insert(groups.end(), ddata.group.begin(), ddata.group.end());
+
+        std::vector<GeometryData> gdata;
+        GeometryLib geos = loadGeometries(config->attribute("GeometryLib"),
+                                          helper.get(), sys, gdata);
+        for(auto&& data : gdata) {
+            groups.insert(groups.end(), data.group.begin(), data.group.end());
+            msd = std::max(msd, data.maxSampleDim);
         }
-        context["lightMatrices"]->set(lightMat);
-        optix::Buffer lightProg = context->createBuffer(
-            RT_BUFFER_INPUT, RT_FORMAT_USER, lightInst.size());
-        {
-            lightProg->setElementSize(sizeof(LightProgram));
-            BufferMapGuard guard(lightProg, RT_BUFFER_MAP_WRITE_DISCARD);
-            for(size_t i = 0; i < lightInst.size(); ++i)
-                guard.as<LightProgram>()[i] = lightInst[i].prog;
-        }
-        context["lightPrograms"]->set(lightProg);
-        reporter.apply(Bus::ReportLevel::Info, "Everything is ready.",
+
+        SamplerData sdata;
+        std::shared_ptr<Sampler> sampler = loadSampler(
+            config->attribute("Sampler"), helper.get(), sys, msd, sdata);
+        groups.insert(groups.end(), sdata.group.begin(), sdata.group.end());
+
+        OptixPipeline pipe;
+        OptixPipelineLinkOptions PLO;
+        PLO.debugLevel = MCO.debugLevel;
+        PLO.maxTraceDepth = 2;
+        PLO.overrideUsesMotionBlur = 0;
+        checkOptixError(optixPipelineCreate(
+            context.get(), &PCO, &PLO, groups.data(),
+            static_cast<unsigned>(groups.size()), nullptr, nullptr, &pipe));
+        Pipeline pipeline{ pipe };
+
+        // TODO:optixPipelineSetStackSize
+
+        LaunchParam launchParam;
+        launchParam.lightSbtOffset = 0;
+        launchParam.samplerSbtOffset =
+            static_cast<unsigned>(SBTSlot::userOffset);
+        launchParam.root = gdata.front().handle;
+
+        OptixShaderBindingTable sbt;
+        std::vector<Data> hitGroup;
+        hitGroup.emplace_back(gdata.front().radSBTData);
+        hitGroup.emplace_back(gdata.front().occSBTData);
+        Buffer hgBuf = uploadSBTRecords(0, hitGroup, sbt.hitgroupRecordBase,
+                                        sbt.hitgroupRecordStrideInBytes,
+                                        sbt.hitgroupRecordStrideInBytes);
+
+        checkCudaError(cuStreamSynchronize(0));
+        reporter.apply(ReportLevel::Info, "Everything is ready.",
                        BUS_DEFSRCLOC());
-        driver->doRender();
+        struct DriverHelperImpl final : DriverHelperAPI {
+        private:
+            CameraAdapter& mCamera;
+            OptixShaderBindingTable& mSBT;
+            std::vector<Data>& mCallable;
+            OptixPipeline mPipeline;
+            LaunchParam mParam;
+
+        public:
+            DriverHelperImpl(CameraAdapter& camera,
+                             OptixShaderBindingTable& sbt,
+                             std::vector<Data>& callable, OptixPipeline& pipe,
+                             LaunchParam param)
+                : mCamera(camera), mSBT(sbt), mCallable(callable),
+                  mPipeline(pipe), mParam(param) {}
+            void doRender(Uint2 size,
+                          const std::function<void(OptixShaderBindingTable&)>&
+                              callBack) override {
+                mCallable[static_cast<unsigned>(SBTSlot::generateRay)] =
+                    mCamera.prepare(size);
+                Buffer buf =
+                    uploadSBTRecords(0, mCallable, mSBT.callablesRecordBase,
+                                     mSBT.callablesRecordStrideInBytes,
+                                     mSBT.callablesRecordCount);
+                callBack(mSBT);
+                Buffer param = uploadParam(0, mParam);
+
+                checkOptixError(optixLaunch(mPipeline, 0, asPtr(param),
+                                            sizeof(mParam), &mSBT, size.x,
+                                            size.y, 1));
+                checkCudaError(cuStreamSynchronize(0));
+            }
+            CUstream getStream() const override {
+                return 0;
+            }
+        };
+        std::vector<Data> callables(static_cast<unsigned>(SBTSlot::userOffset));
+        callables[static_cast<unsigned>(SBTSlot::samplePixel)] = idata.sbtData;
+        callables.insert(callables.end(), sdata.sbtData.begin(),
+                         sdata.sbtData.end());
+        auto dHelper = std::make_unique<DriverHelperImpl>(
+            camera, sbt, callables, pipe, launchParam);
+        driver->doRender(dHelper.get());
+        checkCudaError(cuCtxSynchronize());
     }
     BUS_TRACE_END();
 }

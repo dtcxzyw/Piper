@@ -1,6 +1,11 @@
 #pragma once
 #include "ConfigAPI.hpp"
 
+struct SamplerData final {
+    std::vector<Data> sbtData;
+    std::vector<OptixProgramGroup> group;
+};
+
 class Sampler : public Bus::ModuleFunctionBase {
 protected:
     explicit Sampler(Bus::ModuleInstance& instance)
@@ -11,7 +16,7 @@ public:
         return "Piper.Sampler:1";
     }
 
-    virtual std::vector<Data> init(PluginHelper helper,
-                                   std::shared_ptr<Config> config,
-                                   unsigned maxDim) = 0;
+    virtual SamplerData init(PluginHelper helper,
+                             std::shared_ptr<Config> config,
+                             unsigned maxDim) = 0;
 };

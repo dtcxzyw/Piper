@@ -3,6 +3,7 @@
 
 struct CameraData final {
     unsigned maxSampleDim;
+    OptixProgramGroup group;
 };
 
 class Camera : public Bus::ModuleFunctionBase {

@@ -2,8 +2,8 @@
 #include "DataDesc.hpp"
 
 GLOBAL void __raygen__renderKernel() {
-    const DriverData* data =
-        reinterpret_cast<DriverData*>(optixGetSbtDataPointer());
+    const DataDesc* data =
+        reinterpret_cast<DataDesc*>(optixGetSbtDataPointer());
     uint3 pixelPos = optixGetLaunchIndex();
     unsigned id = data->width * (data->sampleIdx * data->height + pixelPos.y) +
         pixelPos.x;
@@ -17,5 +17,7 @@ GLOBAL void __raygen__renderKernel() {
 }
 
 GLOBAL void __miss__rad() {}
-GLOBAL void __miss__occ() {}
+GLOBAL void __miss__occ() {
+    optixSetPayload_0(1);
+}
 GLOBAL void __exception__empty() {}

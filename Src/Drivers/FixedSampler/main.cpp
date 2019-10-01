@@ -21,7 +21,8 @@ private:
 
 public:
     explicit FixedSampler(Bus::ModuleInstance& instance) : Driver(instance) {}
-    void init(PluginHelper helper, std::shared_ptr<Config> config) override {
+    DriverData init(PluginHelper helper,
+                    std::shared_ptr<Config> config) override {
         BUS_TRACE_BEG() {
             mOutput = config->attribute("Output")->asString();
             mSample = config->attribute("Sample")->asUint();
@@ -55,12 +56,15 @@ public:
             mException.reset(groups[1]);
             mMissRad.reset(groups[2]);
             mMissOcc.reset(groups[3]);
+            DriverData res;
+            res.group.assign(groups, groups + 4);
+            return res;
         }
         BUS_TRACE_END();
     }
     void doRender(DriverHelper helper) override {
         BUS_TRACE_BEG() {
-            DriverData data;
+            DataDesc data;
             data.filtBadColor = mFiltBadColor;
             data.height = mHeight;
             data.width = mWidth;
@@ -76,17 +80,20 @@ public:
                     helper->getStream(), packEmptySBT(mException.get()));
                 Data missRadSBT = packEmptySBT(mMissRad.get());
                 Data missOccSBT = packEmptySBT(mMissOcc.get());
-                Data merge = missRadSBT;
-                merge.insert(merge.end(), missOccSBT.begin(), missOccSBT.end());
-                Buffer missSBT = uploadData(helper->getStream(), merge);
+                std::vector<Data> missSBT;
+                missSBT.emplace_back(missRadSBT);
+                missSBT.emplace_back(missOccSBT);
+                unsigned count, stride;
+                CUdeviceptr ptr;
+                Buffer buf = uploadSBTRecords(helper->getStream(), missSBT, ptr,
+                                              stride, count);
                 helper->doRender(
                     { mWidth, mHeight }, [&](OptixShaderBindingTable& table) {
                         table.exceptionRecord = asPtr(exceptionSBT);
                         table.raygenRecord = asPtr(rayGenSBT);
-                        table.missRecordCount = 2;
-                        table.missRecordBase = asPtr(missSBT);
-                        table.missRecordStrideInBytes =
-                            OPTIX_SBT_RECORD_HEADER_SIZE;
+                        table.missRecordCount = count;
+                        table.missRecordBase = ptr;
+                        table.missRecordStrideInBytes = stride;
                     });
                 std::stringstream ss;
                 ss.precision(2);

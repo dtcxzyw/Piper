@@ -36,6 +36,7 @@ public:
             mGroup.reset(group);
             CameraData res;
             res.maxSampleDim = 4U;
+            res.group = mGroup.get();
             return res;
         }
         BUS_TRACE_END();
