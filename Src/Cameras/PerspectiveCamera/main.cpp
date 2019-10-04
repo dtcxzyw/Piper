@@ -23,12 +23,12 @@ public:
             mSensor /= 1e3f;
             mModule =
                 helper->compileFile(modulePath().parent_path() / "RayGen.ptx");
-            OptixProgramGroupDesc desc;
+            OptixProgramGroupDesc desc = {};
             desc.flags = 0;
             desc.kind = OPTIX_PROGRAM_GROUP_KIND_CALLABLES;
             desc.callables.moduleDC = mModule.get();
             desc.callables.entryFunctionNameDC = "__direct_callable__sampleRay";
-            OptixProgramGroupOptions opt;
+            OptixProgramGroupOptions opt = {};
             OptixProgramGroup group;
             checkOptixError(optixProgramGroupCreate(helper->getContext(), &desc,
                                                     1, &opt, nullptr, nullptr,

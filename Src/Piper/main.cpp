@@ -32,6 +32,7 @@ static Bus::ReportFunction colorOutput(std::ostream& out, rang::fg col,
                                        const char* pre, bool inDetail = false) {
     return [&](Bus::ReportLevel, const std::string& message,
                const Bus::SourceLocation& srcLoc) {
+        /*
         if(pre == std::string("Error")) {
             try {
                 throw std::runtime_error(message);
@@ -39,6 +40,7 @@ static Bus::ReportFunction colorOutput(std::ostream& out, rang::fg col,
                 std::throw_with_nested(srcLoc);
             }
         }
+        */
 
         out << col;
         if(inDetail) {
@@ -64,9 +66,17 @@ static void nestedException(const T& exc, const std::string& lastModule) {
     try {
         std::rethrow_if_nested(exc);
     } catch(const std::exception& ex) {
-        processException(ex, lastModule);
+        if(&ex)
+            processException(ex, lastModule);
+        else {
+            std::cerr << "Unrecognizable Exception." << std::endl;
+        }
     } catch(const Bus::SourceLocation& ex) {
-        processException(ex, lastModule);
+        if(&ex)
+            processException(ex, lastModule);
+        else {
+            std::cerr << "Unrecognizable SourceLocation." << std::endl;
+        }
     } catch(...) {
         std::cerr << "Unknown Error" << std::endl;
     }
@@ -172,13 +182,16 @@ int main(int argc, char** argv) {
                         colorOutput(std::cerr, rang::fg::yellow, "Warning"));
     try {
         Bus::ModuleSystem sys(reporter);
-        auto shared = fs::path(argv[0]).parent_path() / "SharedDll";
-        Bus::addModuleSearchPath(shared, *reporter);
-        sys.wrapBuiltin([](Bus::ModuleSystem& sys) {
-            return std::make_shared<BuiltinFunction>(sys);
-        });
-        loadPlugins(sys);
-        return mainImpl(argc, argv, sys);
+        try {
+            auto shared = fs::path(argv[0]).parent_path() / "SharedDll";
+            Bus::addModuleSearchPath(shared, *reporter);
+            sys.wrapBuiltin([](Bus::ModuleSystem& sys) {
+                return std::make_shared<BuiltinFunction>(sys);
+            });
+            loadPlugins(sys);
+            return mainImpl(argc, argv, sys);
+        }
+        PROCEXC();
     }
     PROCEXC();
     return EXIT_FAILURE;

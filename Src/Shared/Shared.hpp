@@ -47,8 +47,9 @@ struct SRT final {
     Quat rotate;
     Vec3 trans;
     Mat4 getPointTrans() const {
-        return glm::scale(
-            glm::translate(glm::mat4{}, trans) * glm::mat4_cast(rotate), scale);
+        Mat4 t = glm::translate(glm::identity<Mat4>(), trans);
+        Mat4 r = glm::mat4_cast(rotate);
+        return glm::scale(t * r, scale);
     }
 };
 

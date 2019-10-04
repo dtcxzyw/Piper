@@ -83,6 +83,7 @@ static const char* header = R"#()#";
 
 Module PluginHelperImpl::compileSource(const std::string& src) const {
     BUS_TRACE_BEG() {
+        // TODO:PTX Caching
         using Program = std::unique_ptr<_nvrtcProgram, NVRTCProgramDeleter>;
         Program program;
         nvrtcProgram prog;
@@ -90,7 +91,8 @@ Module PluginHelperImpl::compileSource(const std::string& src) const {
         checkNVRTCError(nvrtcCreateProgram(&prog, src.c_str(), "kernel.cu", 1,
                                            &header, &headerName));
         program.reset(prog);
-        const char* opt[] = { "-use_fast_math", "-default-device" };
+        const char* opt[] = { "-use_fast_math", "-default-device",
+                              "-rdc=true" };
         try {
             checkNVRTCError(nvrtcCompileProgram(
                 program.get(), static_cast<int>(std::size(opt)), opt));

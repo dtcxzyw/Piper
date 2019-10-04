@@ -19,13 +19,13 @@ public:
         BUS_TRACE_BEG() {
             mModule = helper->compileFile(modulePath().parent_path() /
                                           "PathKernel.ptx");
-            OptixProgramGroupDesc desc;
+            OptixProgramGroupDesc desc = {};
             desc.kind = OPTIX_PROGRAM_GROUP_KIND_CALLABLES;
             desc.flags = 0;
             desc.callables.entryFunctionNameCC =
                 "__continuation_callable__traceKernel";
             desc.callables.moduleCC = mModule.get();
-            OptixProgramGroupOptions opt;
+            OptixProgramGroupOptions opt = {};
             OptixProgramGroup group;
             checkOptixError(optixProgramGroupCreate(helper->getContext(), &desc,
                                                     1, &opt, nullptr, nullptr,

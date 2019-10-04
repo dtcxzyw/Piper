@@ -7,7 +7,7 @@ GLOBAL void __raygen__renderKernel() {
     uint3 pixelPos = optixGetLaunchIndex();
     unsigned id = data->width * (data->sampleIdx * data->height + pixelPos.y) +
         pixelPos.x;
-    Vec4 res = optixDirectCall<Vec4, unsigned, Uint2>(
+    Vec4 res = optixContinuationCall<Vec4, unsigned, Uint2>(
         static_cast<unsigned>(SBTSlot::samplePixel), id,
         Uint2{ pixelPos.x, pixelPos.y });
     if(data->filtBadColor &

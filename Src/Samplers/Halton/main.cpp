@@ -106,7 +106,7 @@ void genCode(std::stringstream& ss, const std::vector<unsigned>& perms,
              unsigned base, unsigned maxTableSize, unsigned kth) {
     // Special case: radical inverse in base 2, with direct bit reversal.
     if(base == 2) {
-        ss << R"#(__device__ float __direct_callable__sample0(unsigned idx) {
+        ss << R"#(extern "C" __device__ float __direct_callable__sample0(unsigned idx) {
     idx = (idx << 16) | (idx >> 16);
     idx = ((idx & 0x00ff00ff) << 8) | ((idx & 0xff00ff00) >> 8);
     idx = ((idx & 0x0f0f0f0f) << 4) | ((idx & 0xf0f0f0f0) >> 4);
@@ -118,7 +118,8 @@ void genCode(std::stringstream& ss, const std::vector<unsigned>& perms,
     } res;
     res.u = 0x3f800000u | (idx >> 9);
     return res.f - 1.0f;
-})#";
+}
+)#";
     } else {
         unsigned digits = 1, powBase = base;
         while(powBase * base <= maxTableSize)
@@ -135,8 +136,8 @@ void genCode(std::stringstream& ss, const std::vector<unsigned>& perms,
                 ss << ',';
             ss << invert(base, digits, i, perms);
         }
-        ss << "};\n__device__ float __direct_callable__sample" << kth
-           << "(unsigned idx) {\n";
+        ss << "};\nextern \"C\" __device__ float __direct_callable__sample"
+           << kth << "(unsigned idx) {\n";
         ss << "return (LUT" << base << "[idx % " << powBase << "u] * " << power
            << "u + ";
         unsigned div = 1;
@@ -228,7 +229,7 @@ public:
             for(unsigned i = 0; i < maxDim; ++i) {
                 funcNames.emplace_back("__direct_callable__sample" +
                                        std::to_string(i));
-                OptixProgramGroupDesc desc;
+                OptixProgramGroupDesc desc = {};
                 desc.flags = 0;
                 desc.kind = OPTIX_PROGRAM_GROUP_KIND_CALLABLES;
                 desc.callables.moduleDC = mModule.get();
@@ -236,7 +237,7 @@ public:
                 descs.emplace_back(desc);
             }
             std::vector<OptixProgramGroup> pgs(maxDim);
-            OptixProgramGroupOptions opt;
+            OptixProgramGroupOptions opt = {};
             checkOptixError(optixProgramGroupCreate(
                 helper->getContext(), descs.data(), maxDim, &opt, nullptr,
                 nullptr, pgs.data()));

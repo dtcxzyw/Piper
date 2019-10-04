@@ -16,7 +16,7 @@ BUS_MODULE_NAME("Piper.BuiltinGeometry.TriMesh");
 
 class TriMesh final : public Geometry {
 private:
-    Buffer mVertex, mIndex, mNormal, mTexCoord, mAccel;
+    Buffer mVertex, mIndex, mNormal, mTexCoord, mAccel, mMat;
     Module mModule;
     ProgramGroup mRadGroup, mOccGroup;
 
@@ -35,14 +35,14 @@ public:
                  mTexCoord);
             auto mp = modulePath().parent_path();
             if(builtinTriAPI) {
-                OptixAccelBuildOptions opt;
+                OptixAccelBuildOptions opt = {};
                 opt.operation = OPTIX_BUILD_OPERATION_BUILD;
                 opt.buildFlags = OPTIX_BUILD_FLAG_NONE;
                 opt.motionOptions.numKeys = 1;
                 opt.motionOptions.flags = OPTIX_MOTION_FLAG_NONE;
                 opt.motionOptions.timeBegin = opt.motionOptions.timeEnd = 0.0f;
 
-                OptixBuildInput input;
+                OptixBuildInput input = {};
                 input.type = OPTIX_BUILD_INPUT_TYPE_TRIANGLES;
                 OptixBuildInputTriangleArray& arr = input.triangleArray;
                 unsigned flag = OPTIX_GEOMETRY_FLAG_NONE;
@@ -50,14 +50,21 @@ public:
                 arr.indexBuffer = asPtr(mIndex);
                 arr.indexFormat = OPTIX_INDICES_FORMAT_UNSIGNED_INT3;
                 arr.indexStrideInBytes = sizeof(Uint3);
-                arr.numIndexTriplets = 0;
+                arr.numIndexTriplets = static_cast<unsigned>(indexSize);
                 arr.numSbtRecords = 1;
                 arr.numVertices = static_cast<unsigned>(vertexSize);
-                arr.preTransform = 0;  //!!!
+                Mat4 trans4 = srt.getPointTrans();
+                glm::mat3x4 trans = trans4;
+                Buffer dTrans = uploadParam(
+                    stream, trans, OPTIX_GEOMETRY_TRANSFORM_BYTE_ALIGNMENT);
+                arr.preTransform = asPtr(dTrans);
+                // TODO:transform normal
                 arr.primitiveIndexOffset = 0;
-                //!!!
-                arr.sbtIndexOffsetBuffer = 0;
-                arr.sbtIndexOffsetSizeInBytes = 0;
+                mMat = allocBuffer(indexSize);
+                checkCudaError(
+                    cuMemsetD8Async(asPtr(mMat), 0, indexSize, stream));
+                arr.sbtIndexOffsetBuffer = asPtr(mMat);
+                arr.sbtIndexOffsetSizeInBytes = 1;
                 arr.sbtIndexOffsetStrideInBytes = 0;
                 CUdeviceptr ptr = asPtr(mVertex);
                 arr.vertexBuffers = &ptr;
@@ -68,8 +75,10 @@ public:
                 checkOptixError(optixAccelComputeMemoryUsage(
                     helper->getContext(), &opt, &input, 1, &siz));
 
-                Buffer tmp = allocBuffer(siz.tempSizeInBytes);
-                mAccel = allocBuffer(siz.outputSizeInBytes);
+                Buffer tmp = allocBuffer(siz.tempSizeInBytes,
+                                         OPTIX_ACCEL_BUFFER_BYTE_ALIGNMENT);
+                mAccel = allocBuffer(siz.outputSizeInBytes,
+                                     OPTIX_ACCEL_BUFFER_BYTE_ALIGNMENT);
 
                 GeometryData res;
                 res.maxSampleDim = 0;
@@ -84,16 +93,16 @@ public:
 
                 mModule = helper->compileFile(modulePath().parent_path() /
                                               "Triangle.ptx");
-                OptixProgramGroupDesc desc[2];
+                OptixProgramGroupDesc desc[2] = {};
                 desc[0].flags = desc[1].flags = 0;
                 desc[0].kind = desc[1].kind = OPTIX_PROGRAM_GROUP_KIND_HITGROUP;
                 OptixProgramGroupHitgroup& hit0 = desc[0].hitgroup;
-                hit0.moduleAH = mModule.get();
+                hit0.moduleCH = mModule.get();
                 hit0.entryFunctionNameCH = "__closesthit__RCH";
                 OptixProgramGroupHitgroup& hit1 = desc[1].hitgroup;
                 hit1.moduleAH = mModule.get();
                 hit1.entryFunctionNameAH = "__anyhit__OAH";
-                OptixProgramGroupOptions gopt;
+                OptixProgramGroupOptions gopt = {};
                 OptixProgramGroup group[2];
                 checkOptixError(optixProgramGroupCreate(helper->getContext(),
                                                         desc, 2, &gopt, nullptr,
@@ -123,7 +132,9 @@ public:
 class Instance final : public Bus::ModuleInstance {
 public:
     Instance(const fs::path& path, Bus::ModuleSystem& sys)
-        : Bus::ModuleInstance(path, sys) {}
+        : Bus::ModuleInstance(path, sys) {
+        checkOptixError(optixInit());
+    }
     Bus::ModuleInfo info() const override {
         Bus::ModuleInfo res;
         res.name = BUS_DEFAULT_MODULE_NAME;

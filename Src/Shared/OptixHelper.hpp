@@ -14,32 +14,47 @@ inline void checkCudaError(CUresult err) {
         cuGetErrorString(err, &string);
         if(name == nullptr || string == nullptr)
             name = string = "Unknown Error";
-        throw std::runtime_error(std::string("CudaError[") + name + "]" +
-                                 string);
+        if(std::uncaught_exceptions() == 0)
+            throw std::runtime_error(std::string("CudaError[") + name + "]" +
+                                     string);
     }
 }
 
 inline void checkOptixError(OptixResult res) {
     if(res != OptixResult::OPTIX_SUCCESS) {
-        throw std::runtime_error(std::string("OptixError[") +
-                                 optixGetErrorName(res) + "]" +
-                                 optixGetErrorString(res));
+        if(std::uncaught_exceptions() == 0)
+            throw std::runtime_error(std::string("OptixError[") +
+                                     optixGetErrorName(res) + "]" +
+                                     optixGetErrorString(res));
     }
 }
 
 struct DevPtrDeleter final {
+    size_t offset;
+    DevPtrDeleter() : offset(0) {}
+    DevPtrDeleter(size_t off) : offset(off) {}
     void operator()(void* ptr) const {
         static_assert(sizeof(CUdeviceptr) == sizeof(void*));
-        checkCudaError(cuMemFree(reinterpret_cast<CUdeviceptr>(ptr)));
+        checkCudaError(cuMemFree(reinterpret_cast<CUdeviceptr>(ptr) - offset));
     }
 };
 
 using Buffer = std::unique_ptr<void, DevPtrDeleter>;
 
-inline Buffer allocBuffer(size_t siz) {
+template <typename T>
+inline T alignTo(T siz, T align) {
+    if(siz == 0)
+        return align;
+    if(siz % align)
+        return (siz / align + 1) * align;
+    return siz;
+}
+
+inline Buffer allocBuffer(size_t siz, size_t align = 1) {
     CUdeviceptr ptr;
-    checkCudaError(cuMemAlloc(&ptr, siz));
-    return Buffer{ reinterpret_cast<void*>(ptr) };
+    checkCudaError(cuMemAlloc(&ptr, siz + align));
+    CUdeviceptr uptr = alignTo<CUdeviceptr>(ptr, align);
+    return Buffer{ reinterpret_cast<void*>(uptr), DevPtrDeleter{ uptr - ptr } };
 }
 
 inline CUdeviceptr asPtr(const Buffer& buf) {
@@ -62,22 +77,23 @@ inline Data packEmptySBT(OptixProgramGroup prog) {
 }
 
 template <typename T>
-inline Buffer uploadParam(CUstream stream, const T& x) {
-    Buffer res = allocBuffer(sizeof(T));
+inline Buffer uploadParam(CUstream stream, const T& x, size_t align = 1) {
+    Buffer res = allocBuffer(sizeof(T), align);
     checkCudaError(cuMemcpyHtoDAsync(asPtr(res), &x, sizeof(T), stream));
     return res;
 }
 
 template <typename T>
-inline Buffer uploadData(CUstream stream, T* data, size_t size) {
-    Buffer res = allocBuffer(sizeof(T) * size);
+inline Buffer uploadData(CUstream stream, T* data, size_t size,
+                         size_t align = 1) {
+    Buffer res = allocBuffer(sizeof(T) * size, align);
     checkCudaError(
         cuMemcpyHtoDAsync(asPtr(res), data, sizeof(T) * size, stream));
     return res;
 }
 
-inline Buffer uploadData(CUstream stream, const Data& data) {
-    Buffer res = allocBuffer(data.size());
+inline Buffer uploadData(CUstream stream, const Data& data, size_t align = 1) {
+    Buffer res = allocBuffer(data.size(), align);
     checkCudaError(
         cuMemcpyHtoDAsync(asPtr(res), data.data(), data.size(), stream));
     return res;
@@ -124,11 +140,12 @@ inline Buffer uploadSBTRecords(CUstream stream, const std::vector<Data>& data,
         count = static_cast<unsigned>(data.size());
         for(auto&& d : data)
             stride = std::max(stride, static_cast<unsigned>(d.size()));
+        stride = alignTo<unsigned>(stride, OPTIX_SBT_RECORD_ALIGNMENT);
         Data base(stride * count);
         for(unsigned i = 0; i < count; ++i) {
             memcpy(base.data() + i * stride, data[i].data(), data[i].size());
         }
-        Buffer buf = allocBuffer(stride * count);
+        Buffer buf = allocBuffer(stride * count, OPTIX_SBT_RECORD_ALIGNMENT);
         ptr = asPtr(buf);
         checkCudaError(
             cuMemcpyHtoDAsync(ptr, base.data(), base.size(), stream));

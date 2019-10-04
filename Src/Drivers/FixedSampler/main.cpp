@@ -31,7 +31,7 @@ public:
             mFiltBadColor = config->getBool("FiltBadColor", false);
             mModule =
                 helper->compileFile(modulePath().parent_path() / "Kernel.ptx");
-            OptixProgramGroupDesc desc[4];
+            OptixProgramGroupDesc desc[4] = {};
             desc[0].flags = 0;
             desc[0].kind = OPTIX_PROGRAM_GROUP_KIND_RAYGEN;
             desc[0].raygen.entryFunctionName = "__raygen__renderKernel";
@@ -49,7 +49,7 @@ public:
             desc[2].miss.entryFunctionName = "__miss__occ";
             desc[2].miss.module = mModule.get();
             OptixProgramGroup groups[4];
-            OptixProgramGroupOptions opt;
+            OptixProgramGroupOptions opt = {};
             checkOptixError(optixProgramGroupCreate(
                 helper->getContext(), desc, 4, &opt, nullptr, nullptr, groups));
             mRayGen.reset(groups[0]);
@@ -68,9 +68,9 @@ public:
             data.filtBadColor = mFiltBadColor;
             data.height = mHeight;
             data.width = mWidth;
-            Buffer output = allocBuffer(sizeof(Vec4) * mWidth * mHeight);
-            checkCudaError(
-                cuMemsetD8(asPtr(output), 0, sizeof(Vec4) * mWidth * mHeight));
+            Buffer output = allocBuffer(sizeof(Vec4) * mWidth * mHeight, 16);
+            checkCudaError(cuMemsetD16(asPtr(output), 0,
+                                       sizeof(Vec4) / 16 * mWidth * mHeight));
             data.outputBuffer = static_cast<Vec4*>(output.get());
             for(unsigned i = 0; i < mSample; ++i) {
                 data.sampleIdx = i;

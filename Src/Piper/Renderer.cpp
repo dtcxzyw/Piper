@@ -35,6 +35,9 @@ void logCallBack(unsigned int lev, const char* tag, const char* message,
         case 3:
             level = ReportLevel::Warning;
             break;
+        case 4:
+            level = ReportLevel::Info;
+            break;
         default:
             pre = "[UNKNOWN]";
             break;
@@ -69,6 +72,8 @@ CUDAContext createCUDAContext(Bus::Reporter& reporter) {
                        BUS_DEFSRCLOC());
         CUcontext ctx;
         checkCudaError(cuDevicePrimaryCtxRetain(&ctx, dev));
+        checkCudaError(cuCtxSetCurrent(ctx));
+        // checkCudaError(cuCtxCreate(&ctx, CU_CTX_SCHED_AUTO, dev));
         return CUDAContext{ ctx };
     }
     BUS_TRACE_END();
@@ -85,7 +90,7 @@ Context createContext(CUcontext ctx, Bus::Reporter& reporter,
                       std::shared_ptr<Config> config) {
     BUS_TRACE_BEG() {
         checkOptixError(optixInit());
-        OptixDeviceContextOptions opt;
+        OptixDeviceContextOptions opt = {};
         opt.logCallbackLevel =
             static_cast<int>(config->attribute("LogLevel")->asUint());
         opt.logCallbackFunction = logCallBack;
@@ -190,13 +195,13 @@ void renderImpl(std::shared_ptr<Config> config, const fs::path& scenePath,
         auto global = config->attribute("Core");
         Context context = createContext(ctx.get(), sys.getReporter(), global);
         bool debug = global->attribute("Debug")->asBool();
-        OptixModuleCompileOptions MCO;
+        OptixModuleCompileOptions MCO = {};
         MCO.debugLevel = (debug ? OPTIX_COMPILE_DEBUG_LEVEL_FULL :
                                   OPTIX_COMPILE_DEBUG_LEVEL_NONE);
         MCO.maxRegisterCount = OPTIX_COMPILE_DEFAULT_MAX_REGISTER_COUNT;
         MCO.optLevel = (debug ? OPTIX_COMPILE_OPTIMIZATION_LEVEL_0 :
                                 OPTIX_COMPILE_OPTIMIZATION_LEVEL_3);
-        OptixPipelineCompileOptions PCO;
+        OptixPipelineCompileOptions PCO = {};
         PCO.exceptionFlags = OPTIX_EXCEPTION_FLAG_STACK_OVERFLOW |
             OPTIX_EXCEPTION_FLAG_TRACE_DEPTH;
         if(debug)
@@ -204,7 +209,7 @@ void renderImpl(std::shared_ptr<Config> config, const fs::path& scenePath,
         PCO.pipelineLaunchParamsVariableName = "launchParam";
         PCO.traversableGraphFlags = OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_ANY;
         PCO.usesMotionBlur = false;
-        PCO.numAttributeValues = 0;
+        PCO.numAttributeValues = 2;
         PCO.numPayloadValues = 2;
         std::shared_ptr<PluginHelperAPI> helper =
             buildPluginHelper(context.get(), scenePath, debug, MCO, PCO);
@@ -242,8 +247,11 @@ void renderImpl(std::shared_ptr<Config> config, const fs::path& scenePath,
             config->attribute("Sampler"), helper.get(), sys, msd, sdata);
         groups.insert(groups.end(), sdata.group.begin(), sdata.group.end());
 
+        reporter.apply(ReportLevel::Info, "Compiling Pipeline",
+                       BUS_DEFSRCLOC());
+
         OptixPipeline pipe;
-        OptixPipelineLinkOptions PLO;
+        OptixPipelineLinkOptions PLO = {};
         PLO.debugLevel = MCO.debugLevel;
         PLO.maxTraceDepth = 2;
         PLO.overrideUsesMotionBlur = 0;
@@ -260,13 +268,13 @@ void renderImpl(std::shared_ptr<Config> config, const fs::path& scenePath,
             static_cast<unsigned>(SBTSlot::userOffset);
         launchParam.root = gdata.front().handle;
 
-        OptixShaderBindingTable sbt;
+        OptixShaderBindingTable sbt = {};
         std::vector<Data> hitGroup;
         hitGroup.emplace_back(gdata.front().radSBTData);
         hitGroup.emplace_back(gdata.front().occSBTData);
         Buffer hgBuf = uploadSBTRecords(0, hitGroup, sbt.hitgroupRecordBase,
                                         sbt.hitgroupRecordStrideInBytes,
-                                        sbt.hitgroupRecordStrideInBytes);
+                                        sbt.hitgroupRecordCount);
 
         checkCudaError(cuStreamSynchronize(0));
         reporter.apply(ReportLevel::Info, "Everything is ready.",
