@@ -2,6 +2,7 @@
 #include "DataDesc.hpp"
 
 GLOBAL void __closesthit__RCH() {
+    printf("hit\n");
     const DataDesc* data =
         reinterpret_cast<DataDesc*>(optixGetSbtDataPointer());
     float2 vw = optixGetTriangleBarycentrics();

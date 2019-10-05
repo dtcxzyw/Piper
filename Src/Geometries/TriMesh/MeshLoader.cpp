@@ -43,7 +43,7 @@ std::vector<char> loadLZ4(const fs::path& path) {
 
 void load(CUstream stream, const fs::path& path, uint64_t& vertexSize,
           uint64_t& indexSize, Buffer& vertexBuf, Buffer& indexBuf,
-          Buffer& normalBuf, Buffer& texCoordBuf) {
+          Buffer& normalBuf, Buffer& texCoordBuf, Bus::Reporter& reporter) {
     BUS_TRACE_BEG() {
         std::vector<char> data = loadLZ4(path);
         ASSERT(std::string(data.data(), data.data() + 4) == "mesh",
@@ -83,6 +83,10 @@ void load(CUstream stream, const fs::path& path, uint64_t& vertexSize,
                 asPtr(indexBuf), data.data() + offset, siz, stream));
             offset += siz;
         }
+        reporter.apply(ReportLevel::Info,
+                       "Loaded " + std::to_string(vertexSize) + " vertexes," +
+                           std::to_string(indexSize) + " faces.",
+                       BUS_DEFSRCLOC());
     }
     BUS_TRACE_END();
 }

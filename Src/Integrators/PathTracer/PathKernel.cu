@@ -9,7 +9,9 @@ DEVICE Vec4 __continuation_callable__traceKernel(uint32 id, Uint2 pixelPos) {
     uint32_t p0, p1;
     packPointer(&payload, p0, p1);
     for(unsigned i = 0; i < data->sample; ++i) {
-        unsigned seed = ((id * data->sample + i) ^ 0xc3fea875 + i) ^ id;
+        unsigned base = i * 0x45e1c2f2 + pixelPos.x * 0x1a5b2d42 +
+            pixelPos.y * 0x24215fea + 0xfec87421;
+        unsigned seed = (((id * data->sample + base) ^ 0xc3fea875) + base) ^ id;
         RaySample ray = optixDirectCall<RaySample, Uint2, unsigned&>(
             static_cast<unsigned>(SBTSlot::generateRay), pixelPos, seed);
         Spectrum att{ 1.0f };
@@ -19,7 +21,7 @@ DEVICE Vec4 __continuation_callable__traceKernel(uint32 id, Uint2 pixelPos) {
             payload.f = Spectrum{ 0.0f };
             payload.rad = Spectrum{ 0.0f };
             optixTrace(launchParam.root, v2f(ray.ori), v2f(ray.dir), eps, 1e20f,
-                       radianceRay, OPTIX_RAY_FLAG_NONE, radianceOffset,
+                       0.0f, 255, OPTIX_RAY_FLAG_NONE, radianceOffset,
                        traceSBTStride, radianceMiss, p0, p1);
             seed = payload.index;
             res += att * payload.rad;

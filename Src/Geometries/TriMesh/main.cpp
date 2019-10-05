@@ -8,7 +8,7 @@
 
 void load(CUstream stream, const fs::path& path, uint64_t& vertexSize,
           uint64_t& indexSize, Buffer& vertexBuf, Buffer& indexBuf,
-          Buffer& normalBuf, Buffer& texCoordBuf);
+          Buffer& normalBuf, Buffer& texCoordBuf, Bus::Reporter& reporter);
 std::shared_ptr<Bus::ModuleFunctionBase>
 getCommand(Bus::ModuleInstance& instance);
 
@@ -32,7 +32,7 @@ public:
             uint64_t vertexSize, indexSize;
             CUstream stream = 0;
             load(stream, path, vertexSize, indexSize, mVertex, mIndex, mNormal,
-                 mTexCoord);
+                 mTexCoord, reporter());
             auto mp = modulePath().parent_path();
             if(builtinTriAPI) {
                 OptixAccelBuildOptions opt = {};
@@ -60,11 +60,11 @@ public:
                 arr.preTransform = asPtr(dTrans);
                 // TODO:transform normal
                 arr.primitiveIndexOffset = 0;
-                mMat = allocBuffer(indexSize);
+                mMat = allocBuffer(indexSize * sizeof(int));
                 checkCudaError(
-                    cuMemsetD8Async(asPtr(mMat), 0, indexSize, stream));
+                    cuMemsetD32Async(asPtr(mMat), 0, indexSize, stream));
                 arr.sbtIndexOffsetBuffer = asPtr(mMat);
-                arr.sbtIndexOffsetSizeInBytes = 1;
+                arr.sbtIndexOffsetSizeInBytes = 4;
                 arr.sbtIndexOffsetStrideInBytes = 0;
                 CUdeviceptr ptr = asPtr(mVertex);
                 arr.vertexBuffers = &ptr;

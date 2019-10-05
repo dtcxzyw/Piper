@@ -23,8 +23,6 @@ struct LightSample final {
 
 constexpr unsigned geometryMask = 1 << 0;
 constexpr unsigned lightVolumeMask = 1 << 1;
-constexpr unsigned radianceRay = 0;
-constexpr unsigned occlusionRay = 1;
 
 enum class BxDFType {
     Reflection = 1,

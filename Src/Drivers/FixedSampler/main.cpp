@@ -38,7 +38,7 @@ public:
             desc[0].raygen.module = mModule.get();
             desc[1].flags = 0;
             desc[1].kind = OPTIX_PROGRAM_GROUP_KIND_EXCEPTION;
-            desc[1].exception.entryFunctionName = "__exception__empty";
+            desc[1].exception.entryFunctionName = "__exception__default";
             desc[1].exception.module = mModule.get();
             desc[2].flags = 0;
             desc[2].kind = OPTIX_PROGRAM_GROUP_KIND_MISS;
