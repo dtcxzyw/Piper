@@ -44,10 +44,10 @@ public:
             desc[2].kind = OPTIX_PROGRAM_GROUP_KIND_MISS;
             desc[2].miss.entryFunctionName = "__miss__rad";
             desc[2].miss.module = mModule.get();
-            desc[2].flags = 0;
-            desc[2].kind = OPTIX_PROGRAM_GROUP_KIND_MISS;
-            desc[2].miss.entryFunctionName = "__miss__occ";
-            desc[2].miss.module = mModule.get();
+            desc[3].flags = 0;
+            desc[3].kind = OPTIX_PROGRAM_GROUP_KIND_MISS;
+            desc[3].miss.entryFunctionName = "__miss__occ";
+            desc[3].miss.module = mModule.get();
             OptixProgramGroup groups[4];
             OptixProgramGroupOptions opt = {};
             checkOptixError(optixProgramGroupCreate(
@@ -102,6 +102,7 @@ public:
                 reporter().apply(ReportLevel::Info, ss.str(), BUS_DEFSRCLOC());
             }
             {
+                checkCudaError(cuStreamSynchronize(helper->getStream()));
                 std::vector<Vec4> arr =
                     downloadData<Vec4>(output, 0, mWidth * mHeight);
                 unsigned size = mWidth * mHeight;

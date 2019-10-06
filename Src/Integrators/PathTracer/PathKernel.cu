@@ -3,8 +3,7 @@
 
 DEVICE Vec4 __continuation_callable__traceKernel(uint32 id, Uint2 pixelPos) {
     Spectrum res = Spectrum{ 0.0f };
-    const DataDesc* data =
-        reinterpret_cast<DataDesc*>(optixGetSbtDataPointer());
+    auto data = getSBTData<DataDesc>();
     Payload payload;
     uint32_t p0, p1;
     packPointer(&payload, p0, p1);

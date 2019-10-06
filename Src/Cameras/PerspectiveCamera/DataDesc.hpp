@@ -1,7 +1,7 @@
 #pragma once
 #include "../../Shared/Shared.hpp"
 
-struct KernelData final {
+struct DataDesc final {
     Vec3 base, down, right, hole, fStopX, fStopY, axis;
     float focal;
 };

@@ -146,3 +146,8 @@ INLINEDEVICE Payload* getPayload() {
     return reinterpret_cast<Payload*>(
         unpackPointer(optixGetPayload_0(), optixGetPayload_1()));
 }
+
+template <typename T>
+INLINEDEVICE const T* getSBTData() {
+    return reinterpret_cast<T*>(optixGetSbtDataPointer());
+}

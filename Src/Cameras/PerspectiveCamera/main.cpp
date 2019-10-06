@@ -43,7 +43,7 @@ public:
     }
     Data setArgs(float focalLength, float fStop, float focalDistance,
                  Uint2 fullFilm, Vec3 pos, const Quat& posture) const override {
-        KernelData data;
+        DataDesc data;
         focalLength /= 1e3f;
         float aperture = focalLength / fStop * 0.5f;
         Vec2 pixelSize = mSensor / static_cast<Vec2>(fullFilm);

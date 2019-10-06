@@ -2,8 +2,7 @@
 #include "DataDesc.hpp"
 
 GLOBAL void __raygen__renderKernel() {
-    const DataDesc* data =
-        reinterpret_cast<DataDesc*>(optixGetSbtDataPointer());
+    auto data = getSBTData<DataDesc>();
     uint3 pixelPos = optixGetLaunchIndex();
     unsigned id = data->width * (data->sampleIdx * data->height + pixelPos.y) +
         pixelPos.x;
@@ -16,9 +15,7 @@ GLOBAL void __raygen__renderKernel() {
     data->outputBuffer[data->width * pixelPos.y + pixelPos.x] += res;
 }
 
-GLOBAL void __miss__rad() {
-    printf("miss\n");
-}
+GLOBAL void __miss__rad() {}
 GLOBAL void __miss__occ() {
     optixSetPayload_0(1);
 }

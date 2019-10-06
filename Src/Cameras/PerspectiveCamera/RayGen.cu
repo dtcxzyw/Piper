@@ -4,8 +4,7 @@
 DEVICE RaySample __direct_callable__sampleRay(Uint2 pixel, uint32& seed) {
     ++seed;
     Vec2 pixelPos = { sample<0>(seed) + pixel.x, sample<1>(seed) + pixel.y };
-    const KernelData* data =
-        reinterpret_cast<KernelData*>(optixGetSbtDataPointer());
+    auto data = getSBTData<DataDesc>();
     Vec3 ori = data->base + data->right * pixelPos.x + data->down * pixelPos.y;
     Vec3 pinHoleDir = data->hole - ori;
     Vec3 focalPoint =
