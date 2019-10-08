@@ -84,7 +84,8 @@ public:
     virtual SRT getTransform(Name attr) const {
         BUS_TRACE_BEGIN("Piper.Utilities.Config") {
             SRT res;
-            res.trans = Vec3{ 0.0f }, res.scale = Vec3{ 1.0f };
+            res.trans = Vec3{ 0.0f }, res.scale = Vec3{ 1.0f },
+            res.rotate = Quat{};
             if(hasAttr(attr)) {
                 auto transform = attribute(attr);
                 res.trans = transform->getVec3("Trans", res.trans);

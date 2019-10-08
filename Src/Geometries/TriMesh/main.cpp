@@ -57,7 +57,7 @@ public:
                 glm::mat3x4 trans = trans4;
                 Buffer dTrans = uploadParam(
                     stream, trans, OPTIX_GEOMETRY_TRANSFORM_BYTE_ALIGNMENT);
-                arr.preTransform = asPtr(dTrans);
+                arr.preTransform =  asPtr(dTrans);
                 // TODO:transform normal
                 arr.primitiveIndexOffset = 0;
                 mMat = allocBuffer(indexSize * sizeof(int));
@@ -87,7 +87,6 @@ public:
                     helper->getContext(), stream, &opt, &input, 1, asPtr(tmp),
                     siz.tempSizeInBytes, asPtr(mAccel), siz.outputSizeInBytes,
                     &res.handle, nullptr, 0));
-
                 checkCudaError(cuStreamSynchronize(stream));
                 tmp.reset(nullptr);
 

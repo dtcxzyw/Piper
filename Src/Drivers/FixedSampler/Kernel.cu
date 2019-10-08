@@ -27,3 +27,4 @@ GLOBAL void __exception__default() {
     else
         printf("exception %d\n", code);
 }
+GLOBAL void __exception__silence() {}

@@ -141,12 +141,12 @@ std::shared_ptr<Integrator> loadIntegrator(std::shared_ptr<Config> config,
 
 std::shared_ptr<Driver> loadDriver(std::shared_ptr<Config> config,
                                    PluginHelper helper, Bus::ModuleSystem& sys,
-                                   DriverData& data) {
+                                   DriverData& data, bool debug) {
     sys.getReporter().apply(Bus::ReportLevel::Info, "Loading driver",
                             BUS_DEFSRCLOC());
     auto driver =
         sys.instantiateByName<Driver>(config->attribute("Plugin")->asString());
-    data = driver->init(helper, config);
+    data = driver->init(helper, config, debug);
     return driver;
 }
 
@@ -195,6 +195,9 @@ void renderImpl(std::shared_ptr<Config> config, const fs::path& scenePath,
         auto global = config->attribute("Core");
         Context context = createContext(ctx.get(), sys.getReporter(), global);
         bool debug = global->attribute("Debug")->asBool();
+        if(!debug) {
+            checkCudaError(cuCtxSetLimit(CU_LIMIT_PRINTF_FIFO_SIZE, 0));
+        }
         OptixModuleCompileOptions MCO = {};
         MCO.debugLevel = (debug ? OPTIX_COMPILE_DEBUG_LEVEL_FULL :
                                   OPTIX_COMPILE_DEBUG_LEVEL_NONE);
@@ -231,8 +234,8 @@ void renderImpl(std::shared_ptr<Config> config, const fs::path& scenePath,
         msd = std::max(msd, idata.maxSampleDim);
 
         DriverData ddata;
-        std::shared_ptr<Driver> driver =
-            loadDriver(config->attribute("Driver"), helper.get(), sys, ddata);
+        std::shared_ptr<Driver> driver = loadDriver(
+            config->attribute("Driver"), helper.get(), sys, ddata, debug);
         groups.insert(groups.end(), ddata.group.begin(), ddata.group.end());
 
         std::vector<GeometryData> gdata;
@@ -298,19 +301,22 @@ void renderImpl(std::shared_ptr<Config> config, const fs::path& scenePath,
             void doRender(Uint2 size,
                           const std::function<void(OptixShaderBindingTable&)>&
                               callBack) override {
-                mCallable[static_cast<unsigned>(SBTSlot::generateRay)] =
-                    mCamera.prepare(size);
-                Buffer buf =
-                    uploadSBTRecords(0, mCallable, mSBT.callablesRecordBase,
-                                     mSBT.callablesRecordStrideInBytes,
-                                     mSBT.callablesRecordCount);
-                callBack(mSBT);
-                Buffer param = uploadParam(0, mParam);
+                BUS_TRACE_BEG() {
+                    mCallable[static_cast<unsigned>(SBTSlot::generateRay)] =
+                        mCamera.prepare(size);
+                    Buffer buf =
+                        uploadSBTRecords(0, mCallable, mSBT.callablesRecordBase,
+                                         mSBT.callablesRecordStrideInBytes,
+                                         mSBT.callablesRecordCount);
+                    callBack(mSBT);
+                    Buffer param = uploadParam(0, mParam);
 
-                checkOptixError(optixLaunch(mPipeline, 0, asPtr(param),
-                                            sizeof(mParam), &mSBT, size.x,
-                                            size.y, 1));
-                checkCudaError(cuStreamSynchronize(0));
+                    checkOptixError(optixLaunch(mPipeline, 0, asPtr(param),
+                                                sizeof(mParam), &mSBT, size.x,
+                                                size.y, 1));
+                    checkCudaError(cuStreamSynchronize(0));
+                }
+                BUS_TRACE_END();
             }
             CUstream getStream() const override {
                 return 0;

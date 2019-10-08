@@ -50,10 +50,11 @@ inline T alignTo(T siz, T align) {
     return siz;
 }
 
-inline Buffer allocBuffer(size_t siz, size_t align = 1) {
+inline Buffer allocBuffer(size_t siz, size_t align = 16) {
+    align = std::max(align, 16ull);
     CUdeviceptr ptr;
     checkCudaError(cuMemAlloc(&ptr, siz + align));
-    CUdeviceptr uptr = alignTo<CUdeviceptr>(ptr, align);
+    CUdeviceptr uptr = (ptr / align + 1) * align;
     return Buffer{ reinterpret_cast<void*>(uptr), DevPtrDeleter{ uptr - ptr } };
 }
 
@@ -77,7 +78,7 @@ inline Data packEmptySBT(OptixProgramGroup prog) {
 }
 
 template <typename T>
-inline Buffer uploadParam(CUstream stream, const T& x, size_t align = 1) {
+inline Buffer uploadParam(CUstream stream, const T& x, size_t align = 16) {
     Buffer res = allocBuffer(sizeof(T), align);
     checkCudaError(cuMemcpyHtoDAsync(asPtr(res), &x, sizeof(T), stream));
     return res;
@@ -85,14 +86,14 @@ inline Buffer uploadParam(CUstream stream, const T& x, size_t align = 1) {
 
 template <typename T>
 inline Buffer uploadData(CUstream stream, T* data, size_t size,
-                         size_t align = 1) {
+                         size_t align = 16) {
     Buffer res = allocBuffer(sizeof(T) * size, align);
     checkCudaError(
         cuMemcpyHtoDAsync(asPtr(res), data, sizeof(T) * size, stream));
     return res;
 }
 
-inline Buffer uploadData(CUstream stream, const Data& data, size_t align = 1) {
+inline Buffer uploadData(CUstream stream, const Data& data, size_t align = 16) {
     Buffer res = allocBuffer(data.size(), align);
     checkCudaError(
         cuMemcpyHtoDAsync(asPtr(res), data.data(), data.size(), stream));

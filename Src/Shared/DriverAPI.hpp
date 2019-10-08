@@ -25,7 +25,7 @@ public:
         return "Piper.Driver:1";
     }
 
-    virtual DriverData init(PluginHelper helper,
-                            std::shared_ptr<Config> config) = 0;
+    virtual DriverData init(PluginHelper helper, std::shared_ptr<Config> config,
+                            bool debug) = 0;
     virtual void doRender(DriverHelper helper) = 0;
 };
