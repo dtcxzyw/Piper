@@ -10,12 +10,11 @@ GLOBAL void __closesthit__RCH() {
     Vec3 p0 = data->vertex[0], p1 = data->vertex[1], p2 = data->vertex[2];
     Vec3 ng = glm::cross(p1 - p0, p2 - p0);
     bool front = optixIsTriangleFrontFaceHit();
-    ng = (front ? ng : -ng);
     Vec3 ns;
     if(data->normal) {
         ns = data->normal[idx.x] * u + data->normal[idx.y] * v +
             data->normal[idx.z] * w;
-        ns = (front ? ns : -ns);
+        ns = (glm::dot(ns, ng) > 0.0f ? ns : -ns);
     } else
         ns = ng;
 
@@ -23,6 +22,12 @@ GLOBAL void __closesthit__RCH() {
     if(data->texCoord)
         texCoord = data->texCoord[idx.x] * u + data->texCoord[idx.y] * v +
             data->texCoord[idx.z] * w;
+
+    Vec3 ori = f2v(optixGetWorldRayOrigin());
+    Vec3 dir = f2v(optixGetWorldRayDirection());
+    Vec3 hit = ori + optixGetRayTmin() * dir;
+    builtinMaterialSample(data->material, payload, dir, hit, ng, ns, texCoord,
+                          optixGetTime(), front);
     payload->hit = false;
     payload->rad = glm::normalize(glm::abs(ns));
 }

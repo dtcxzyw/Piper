@@ -1,43 +1,40 @@
-#include "../../Shared/IntegratorAPI.hpp"
+#include "../../Shared/TextureSamplerAPI.hpp"
 #include "DataDesc.hpp"
 #pragma warning(push, 0)
 #include <optix_function_table_definition.h>
 #include <optix_stubs.h>
 #pragma warning(pop)
 
-BUS_MODULE_NAME("Piper.BuiltinIntegrator.PathTracer");
+BUS_MODULE_NAME("Piper.BuiltinTextureSampler.BuiltinSampler");
 
-class PathTracer final : public Integrator {
+class ConstantColor final : public TextureSampler {
 private:
-    Module mModule;
-    ProgramGroup mGroup;
+    Module mProg;
+    ProgramGroup mProgramGroup;
 
 public:
-    explicit PathTracer(Bus::ModuleInstance& instance) : Integrator(instance) {}
-    IntegratorData init(PluginHelper helper,
-                        std::shared_ptr<Config> config) override {
+    explicit ConstantColor(Bus::ModuleInstance& instance)
+        : TextureSampler(instance) {}
+    TextureSamplerData init(PluginHelper helper,
+                            std::shared_ptr<Config> cfg) override {
         BUS_TRACE_BEG() {
-            mModule = helper->compileFile(modulePath().parent_path() /
-                                          "PathKernel.ptx");
+            Constant data;
+            data.color = cfg->attribute("color")->asVec3();
+            mProg = helper->compileFile(modulePath().parent_path() /
+                                        "Constant.ptx");
             OptixProgramGroupDesc desc = {};
             desc.kind = OPTIX_PROGRAM_GROUP_KIND_CALLABLES;
-            desc.flags = 0;
-            desc.callables.entryFunctionNameCC =
-                "__continuation_callable__traceKernel";
-            desc.callables.moduleCC = mModule.get();
+            desc.callables.moduleDC = mProg.get();
+            desc.callables.entryFunctionNameDC = "__direct_callable__tex";
             OptixProgramGroupOptions opt = {};
             OptixProgramGroup group;
             checkOptixError(optixProgramGroupCreate(helper->getContext(), &desc,
                                                     1, &opt, nullptr, nullptr,
                                                     &group));
-            mGroup.reset(group);
-            DataDesc data;
-            data.maxDepth = config->attribute("MaxDepth")->asUint();
-            data.sample = config->attribute("Sample")->asUint();
-            IntegratorData res;
-            res.sbtData = packSBTRecord(mGroup.get(), data);
-            res.maxSampleDim = 0;
-            res.group = mGroup.get();
+            mProgramGroup.reset(group);
+            TextureSamplerData res;
+            res.sbtData = packSBTRecord(mProgramGroup.get(), data);
+            res.group = mProgramGroup.get();
             return res;
         }
         BUS_TRACE_END();
@@ -53,22 +50,22 @@ public:
     Bus::ModuleInfo info() const override {
         Bus::ModuleInfo res;
         res.name = BUS_DEFAULT_MODULE_NAME;
-        res.guid = Bus::str2GUID("{E8D0D7A4-A55C-443C-A4AB-3EE3E5BA7928}");
+        res.guid = Bus::str2GUID("{F177FF52-7AB2-466D-B898-75B270E0FCB8}");
         res.busVersion = BUS_VERSION;
         res.version = "0.0.1";
-        res.description = "PathTracer";
+        res.description = "BuiltinTextureSampler";
         res.copyright = "Copyright (c) 2019 Zheng Yingwei";
         res.modulePath = getModulePath();
         return res;
     }
     std::vector<Bus::Name> list(Bus::Name api) const override {
-        if(api == Integrator::getInterface())
-            return { "PathTracer" };
+        if(api == TextureSampler::getInterface())
+            return { "Constant" };
         return {};
     }
     std::shared_ptr<Bus::ModuleFunctionBase> instantiate(Name name) override {
-        if(name == "PathTracer")
-            return std::make_shared<PathTracer>(*this);
+        if(name == "Constant")
+            return std::make_shared<ConstantColor>(*this);
         return nullptr;
     }
 };

@@ -2,9 +2,9 @@
 #include "ConfigAPI.hpp"
 
 struct MaterialData final {
-    Data radData, occData;
+    Data radData;
     unsigned maxSampleDim;
-    std::vector<OptixProgramGroup> group;
+    OptixProgramGroup group;
 };
 
 class Material : public Bus::ModuleFunctionBase {

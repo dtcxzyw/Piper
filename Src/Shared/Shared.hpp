@@ -37,7 +37,7 @@ enum class BxDFType {
 enum class SBTSlot : unsigned {
     generateRay,
     samplePixel,
-    // sampleOneLight,
+    sampleOneLight,
     userOffset
 };
 

@@ -21,8 +21,7 @@ private:
 
 public:
     explicit FixedSampler(Bus::ModuleInstance& instance) : Driver(instance) {}
-    DriverData init(PluginHelper helper, std::shared_ptr<Config> config,
-                    bool debug) override {
+    DriverData init(PluginHelper helper, std::shared_ptr<Config> config) override {
         BUS_TRACE_BEG() {
             mOutput = config->attribute("Output")->asString();
             mSample = config->attribute("Sample")->asUint();
@@ -39,7 +38,8 @@ public:
             desc[1].flags = 0;
             desc[1].kind = OPTIX_PROGRAM_GROUP_KIND_EXCEPTION;
             desc[1].exception.entryFunctionName =
-                (debug ? "__exception__default" : "__exception__silence");
+                (helper->isDebug() ? "__exception__default" :
+                                     "__exception__silence");
             desc[1].exception.module = mModule.get();
             desc[2].flags = 0;
             desc[2].kind = OPTIX_PROGRAM_GROUP_KIND_MISS;
@@ -76,11 +76,11 @@ public:
             for(unsigned i = 0; i < mSample; ++i) {
                 data.sampleIdx = i;
                 Buffer rayGenSBT = uploadData(helper->getStream(),
-                                              packSBT(mRayGen.get(), data));
+                                              packSBTRecord(mRayGen.get(), data));
                 Buffer exceptionSBT = uploadData(
-                    helper->getStream(), packEmptySBT(mException.get()));
-                Data missRadSBT = packEmptySBT(mMissRad.get());
-                Data missOccSBT = packEmptySBT(mMissOcc.get());
+                    helper->getStream(), packEmptySBTRecord(mException.get()));
+                Data missRadSBT = packEmptySBTRecord(mMissRad.get());
+                Data missOccSBT = packEmptySBTRecord(mMissOcc.get());
                 std::vector<Data> missSBT;
                 missSBT.emplace_back(missRadSBT);
                 missSBT.emplace_back(missOccSBT);

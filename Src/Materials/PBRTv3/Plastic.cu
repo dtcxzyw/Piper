@@ -1,33 +1,36 @@
 #include "../../Shared/KernelShared.hpp"
 #include "BxDF.hpp"
+#include "DataDesc.hpp"
+#include "ShadingSpace.hpp"
 
-rtDeclareVariable(Payload, payload, rtPayload, );
-rtDeclareVariable(Vec2, texCoord, attribute texCoord, );
-TextureSampler(float4) materialKd;
-TextureSampler(float4) materialKs;
-TextureSampler(float2) materialRoughness;
+DEVICE void __continuation_callable__sample(Payload* payload, Vec3 dir,
+                                            Vec3 hit, Vec3 ng, Vec3 ns,
+                                            Vec2 texCoord, float rayTime,
+                                            bool front) {
+    auto data = getSBTData<PlasticData>();
+    Spectrum Kd = builtinTex2D(data->kd, texCoord);
+    Spectrum Ks = builtinTex2D(data->ks, texCoord);
+    Vec2 roughness = builtinTex2D(data->roughness, texCoord);
 
-RT_PROGRAM void closestHit() {
-    ShadingSpace ss = calcPayload(payload);
-    Spectrum Kd = make_float3(tex2D(materialKd, texCoord.x, texCoord.y));
-    Spectrum Ks = make_float3(tex2D(materialKs, texCoord.x, texCoord.y));
-    Vec2 roughness = tex2D(materialRoughness, texCoord.x, texCoord.y);
+    Vec3 wo, frontOffset;
+    Mat3 w2s, s2w;
+    calcShadingSpace(dir, ng, ns, front, wo, frontOffset, w2s);
+    s2w = glm::transpose(w2s);
+
     LambertianReflection lr(Kd);
     MicrofacetReflection mr(Ks, roughness, FresnelDielectric(1.5f, 1.0f));
-    uint32 seed = ++payload.index;
-    bool choice = sample1(seed) < 0.5f;
-    Vec2 u = make_float2(sample2(seed), sample3(seed));
-    Vec3 wi = choice ? lr.sampleF(ss.wo, u) : mr.sampleF(ss.wo, u);
-    float fpdf = 0.5f * (lr.pdf(ss.wo, wi) + mr.pdf(ss.wo, wi));
+    uint32 seed = ++payload->index;
+    bool choice = sample<0>(seed) < 0.5f;
+    Vec2 u = { sample<1>(seed), sample<2>(seed) };
+    Vec3 wi = choice ? lr.sampleF(wo, u) : mr.sampleF(wo, u);
+    float fpdf = 0.5f * (lr.pdf(wo, wi) + mr.pdf(wo, wi));
     if(fpdf >= eps)
-        payload.f = (lr.f(ss.wo, wi) + mr.f(ss.wo, wi)) *
-            (fabsf(dot(wi, ss.base.m_normal)) / fpdf);
-    payload.wi = wi;
-    ss.base.inverse_transform(payload.wi);
-    LightSample ls = sampleOneLight(payload.ori, sample4(seed));
-    wi = ss.toLocal(ls.wi);
-    float lpdf = 0.5f * (lr.pdf(ss.wo, wi) + mr.pdf(ss.wo, wi));
+        payload->f = (lr.f(wo, wi) + mr.f(wo, wi)) * (absCosTheta(wi) / fpdf);
+    payload->wi = s2w * wi;
+    LightSample ls = sampleOneLight(payload->ori, rayTime, payload->index);
+    wi = w2s * ls.wi;
+    float lpdf = 0.5f * (lr.pdf(wo, wi) + mr.pdf(wo, wi));
     if(lpdf >= eps)
-        payload.rad = ls.rad * (lr.f(ss.wo, wi) + mr.f(ss.wo, wi)) *
-            (fabsf(dot(wi, ss.base.m_normal)) / lpdf);
+        payload->rad = ls.rad * (lr.f(wo, wi) + mr.f(wo, wi)) *
+            (absCosTheta(wi) / lpdf);
 }

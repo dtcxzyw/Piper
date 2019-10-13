@@ -223,7 +223,7 @@ public:
             std::string src = generateSoruce(maxDim, config, reporter());
             reporter().apply(ReportLevel::Debug, "Source:\n" + src,
                              BUS_DEFSRCLOC());
-            mModule = helper->compileSource(src);
+            mModule = helper->compile(helper->compileSource(src));
             std::vector<std::string> funcNames;
             std::vector<OptixProgramGroupDesc> descs;
             for(unsigned i = 0; i < maxDim; ++i) {
@@ -245,7 +245,7 @@ public:
                 mPrograms.emplace_back(prog);
             SamplerData res;
             for(auto&& prog : mPrograms)
-                res.sbtData.emplace_back(packEmptySBT(prog.get()));
+                res.sbtData.emplace_back(packEmptySBTRecord(prog.get()));
             res.group = pgs;
             return res;
         }

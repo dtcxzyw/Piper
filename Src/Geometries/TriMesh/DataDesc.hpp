@@ -6,4 +6,5 @@ struct DataDesc final {
     const Uint3* index;
     const Vec3* normal;
     const Vec2* texCoord;
+    unsigned material;
 };

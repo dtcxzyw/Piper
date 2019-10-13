@@ -107,11 +107,13 @@
     <ClInclude Include="..\..\Src\Shared\IntegratorAPI.hpp" />
     <ClInclude Include="..\..\Src\Shared\KernelShared.hpp" />
     <ClInclude Include="..\..\Src\Shared\LightAPI.hpp" />
+    <ClInclude Include="..\..\Src\Shared\LightSamplerAPI.hpp" />
     <ClInclude Include="..\..\Src\Shared\MaterialAPI.hpp" />
     <ClInclude Include="..\..\Src\Shared\OptixHelper.hpp" />
     <ClInclude Include="..\..\Src\Shared\PluginShared.hpp" />
     <ClInclude Include="..\..\Src\Shared\SamplerAPI.hpp" />
     <ClInclude Include="..\..\Src\Shared\Shared.hpp" />
+    <ClInclude Include="..\..\Src\Shared\TextureSamplerAPI.hpp" />
   </ItemGroup>
   <ItemGroup>
     <None Include="..\..\Src\Piper\Default.cu">

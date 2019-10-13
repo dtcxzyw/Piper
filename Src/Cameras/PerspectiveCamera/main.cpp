@@ -57,7 +57,7 @@ public:
         data.hole = pos;
         data.focal = focalDistance + focalLength;
         data.axis = posture * Vec3{ 0.0f, 0.0f, -1.0f };
-        return packSBT(mGroup.get(), data);
+        return packSBTRecord(mGroup.get(), data);
     }
 };
 

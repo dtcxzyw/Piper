@@ -1,43 +1,42 @@
-#include "../../Shared/IntegratorAPI.hpp"
+#include "../../Shared/LightSamplerAPI.hpp"
 #include "DataDesc.hpp"
 #pragma warning(push, 0)
 #include <optix_function_table_definition.h>
 #include <optix_stubs.h>
 #pragma warning(pop)
 
-BUS_MODULE_NAME("Piper.BuiltinIntegrator.PathTracer");
+BUS_MODULE_NAME("Piper.BuiltinLightSampler.SimpleSampler");
 
-class PathTracer final : public Integrator {
+class UniformSampler final : public LightSampler {
 private:
-    Module mModule;
-    ProgramGroup mGroup;
+    Module mProg;
+    ProgramGroup mProgramGroup;
 
 public:
-    explicit PathTracer(Bus::ModuleInstance& instance) : Integrator(instance) {}
-    IntegratorData init(PluginHelper helper,
-                        std::shared_ptr<Config> config) override {
+    explicit UniformSampler(Bus::ModuleInstance& instance)
+        : LightSampler(instance) {}
+    LightSamplerData init(PluginHelper helper, std::shared_ptr<Config> cfg,
+                          size_t lightNum) override {
         BUS_TRACE_BEG() {
-            mModule = helper->compileFile(modulePath().parent_path() /
-                                          "PathKernel.ptx");
+            DataDesc data;
+            data.lightNum = static_cast<unsigned>(lightNum);
+            mProg =
+                helper->compileFile(modulePath().parent_path() / "Sampler.ptx");
             OptixProgramGroupDesc desc = {};
             desc.kind = OPTIX_PROGRAM_GROUP_KIND_CALLABLES;
-            desc.flags = 0;
+            desc.callables.moduleCC = mProg.get();
             desc.callables.entryFunctionNameCC =
-                "__continuation_callable__traceKernel";
-            desc.callables.moduleCC = mModule.get();
+                "__continuation_callable__sample";
             OptixProgramGroupOptions opt = {};
             OptixProgramGroup group;
             checkOptixError(optixProgramGroupCreate(helper->getContext(), &desc,
                                                     1, &opt, nullptr, nullptr,
                                                     &group));
-            mGroup.reset(group);
-            DataDesc data;
-            data.maxDepth = config->attribute("MaxDepth")->asUint();
-            data.sample = config->attribute("Sample")->asUint();
-            IntegratorData res;
-            res.sbtData = packSBTRecord(mGroup.get(), data);
-            res.maxSampleDim = 0;
-            res.group = mGroup.get();
+            mProgramGroup.reset(group);
+            LightSamplerData res;
+            res.sbtData = packSBTRecord(group, data);
+            res.maxSampleDim = 1;
+            res.group = group;
             return res;
         }
         BUS_TRACE_END();
@@ -53,22 +52,22 @@ public:
     Bus::ModuleInfo info() const override {
         Bus::ModuleInfo res;
         res.name = BUS_DEFAULT_MODULE_NAME;
-        res.guid = Bus::str2GUID("{E8D0D7A4-A55C-443C-A4AB-3EE3E5BA7928}");
+        res.guid = Bus::str2GUID("{11E4DC1D-3874-44F6-8C16-5E7559552D16}");
         res.busVersion = BUS_VERSION;
         res.version = "0.0.1";
-        res.description = "PathTracer";
+        res.description = "SimpleSampler";
         res.copyright = "Copyright (c) 2019 Zheng Yingwei";
         res.modulePath = getModulePath();
         return res;
     }
     std::vector<Bus::Name> list(Bus::Name api) const override {
-        if(api == Integrator::getInterface())
-            return { "PathTracer" };
+        if(api == LightSampler::getInterface())
+            return { "UniformSampler" };
         return {};
     }
     std::shared_ptr<Bus::ModuleFunctionBase> instantiate(Name name) override {
-        if(name == "PathTracer")
-            return std::make_shared<PathTracer>(*this);
+        if(name == "UniformSampler")
+            return std::make_shared<UniformSampler>(*this);
         return nullptr;
     }
 };

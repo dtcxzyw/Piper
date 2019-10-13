@@ -19,7 +19,8 @@ public:
         BUS_TRACE_BEG() {
             DirLight data;
             data.lum = cfg->attribute("Lum")->asVec3();
-            data.direction = normalize(cfg->attribute("Direction")->asVec3());
+            data.direction =
+                glm::normalize(cfg->attribute("Direction")->asVec3());
             data.distance = cfg->attribute("Distance")->asFloat() - (1e-8f);
             mProg = helper->compileFile(modulePath().parent_path() /
                                         "DirLight.ptx");
@@ -35,16 +36,12 @@ public:
                                                     &group));
             mProgramGroup.reset(group);
             LightData res;
-            res.sbtData = packSBT(mProgramGroup.get(), data);
+            res.sbtData = packSBTRecord(mProgramGroup.get(), data);
             res.maxSampleDim = 0;
             res.group = mProgramGroup.get();
             return res;
         }
         BUS_TRACE_END();
-    }
-    ~DirectionalLight() {
-        mProgramGroup.reset();
-        mProg.reset();
     }
 };
 

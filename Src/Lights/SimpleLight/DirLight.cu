@@ -2,12 +2,13 @@
 #include "DataDesc.hpp"
 
 DEVICE LightSample __continuation_callable__sample(const Vec3& pos,
-                                                   const Mat4&) {
+                                                   float rayTime,
+                                                   uint32_t& seed) {
     auto light = getSBTData<DirLight>();
     Vec3 ori = pos - light->distance * light->direction;
     unsigned noHit = 0;
     optixTrace(launchParam.root, v2f(ori), v2f(light->direction), eps,
-               light->distance, optixGetRayTime(), geometryMask,
+               light->distance, rayTime, geometryMask,
                OPTIX_RAY_FLAG_TERMINATE_ON_FIRST_HIT, occlusionOffset,
                traceSBTStride, occlusionMiss, noHit);
     LightSample res;

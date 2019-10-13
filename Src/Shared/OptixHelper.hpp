@@ -64,14 +64,14 @@ inline CUdeviceptr asPtr(const Buffer& buf) {
 
 using Data = std::vector<std::byte>;
 template <typename T>
-Data packSBT(OptixProgramGroup prog, const T& data) {
+Data packSBTRecord(OptixProgramGroup prog, const T& data) {
     Data res(OPTIX_SBT_RECORD_HEADER_SIZE + sizeof(data));
     checkOptixError(optixSbtRecordPackHeader(prog, res.data()));
     memcpy(res.data() + OPTIX_SBT_RECORD_HEADER_SIZE, &data, sizeof(data));
     return res;
 }
 
-inline Data packEmptySBT(OptixProgramGroup prog) {
+inline Data packEmptySBTRecord(OptixProgramGroup prog) {
     Data res(OPTIX_SBT_RECORD_HEADER_SIZE);
     checkOptixError(optixSbtRecordPackHeader(prog, res.data()));
     return res;

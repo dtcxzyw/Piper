@@ -151,3 +151,24 @@ template <typename T>
 INLINEDEVICE const T* getSBTData() {
     return reinterpret_cast<T*>(optixGetSbtDataPointer());
 }
+
+INLINEDEVICE void builtinMaterialSample(unsigned id, Payload* payload, Vec3 dir,
+                                        Vec3 hit, Vec3 ng, Vec3 ns,
+                                        Vec2 texCoord, float rayTime,
+                                        bool front) {
+    optixContinuationCall<void, Payload*, Vec3, Vec3, Vec3, Vec3, Vec2, float,
+                          bool>(id, payload, dir, hit, ng, ns, texCoord,
+                                rayTime, front);
+}
+
+INLINEDEVICE Spectrum builtinTex2D(unsigned id, Vec2 uv) {
+    if(id)
+        return optixDirectCall<Spectrum, Vec2>(id, uv);
+    return Spectrum{ 0.0f };
+}
+
+INLINEDEVICE LightSample sampleOneLight(const Vec3& pos, float rayTime,
+                                        uint32_t& seed) {
+    return optixContinuationCall<LightSample, const Vec3&, float, uint32_t&>(
+        static_cast<unsigned>(SBTSlot::sampleOneLight), pos, rayTime, seed);
+}

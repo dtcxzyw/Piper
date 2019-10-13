@@ -1,5 +1,6 @@
 #include "../../Shared/CommandAPI.hpp"
 #include "../../Shared/GeometryAPI.hpp"
+#include "../../Shared/MaterialAPI.hpp"
 #include "DataDesc.hpp"
 #pragma warning(push, 0)
 #include <optix_function_table_definition.h>
@@ -19,6 +20,7 @@ private:
     Buffer mVertex, mIndex, mNormal, mTexCoord, mAccel, mMat;
     Module mModule;
     ProgramGroup mRadGroup, mOccGroup;
+    std::shared_ptr<Material> mMat;
 
 public:
     explicit TriMesh(Bus::ModuleInstance& instance) : Geometry(instance) {}
@@ -33,6 +35,17 @@ public:
             CUstream stream = 0;
             load(stream, path, vertexSize, indexSize, mVertex, mIndex, mNormal,
                  mTexCoord, reporter());
+
+            auto matCfg = config->attribute("Material");
+            mMat = this->system().instantiateByName(
+                matCfg->attribute("Plugin")->asString());
+            MaterialData matData = mMat->init(helper, matCfg);
+            DataDesc data;
+            data.vertex = static_cast<Vec3*>(mVertex.get());
+            data.index = static_cast<Uint3*>(mIndex.get());
+            data.normal = static_cast<Vec3*>(mNormal.get());
+            data.texCoord = static_cast<Vec2*>(mTexCoord.get());
+            data.material = helper->addCallable(matData.group, matData.radData);
             auto mp = modulePath().parent_path();
             if(builtinTriAPI) {
                 OptixAccelBuildOptions opt = {};
@@ -57,7 +70,7 @@ public:
                 glm::mat3x4 trans = trans4;
                 Buffer dTrans = uploadParam(
                     stream, trans, OPTIX_GEOMETRY_TRANSFORM_BYTE_ALIGNMENT);
-                arr.preTransform =  asPtr(dTrans);
+                arr.preTransform = asPtr(dTrans);
                 // TODO:transform normal
                 arr.primitiveIndexOffset = 0;
                 mMat = allocBuffer(indexSize * sizeof(int));
@@ -81,7 +94,7 @@ public:
                                      OPTIX_ACCEL_BUFFER_BYTE_ALIGNMENT);
 
                 GeometryData res;
-                res.maxSampleDim = 0;
+                res.maxSampleDim = matData.maxSampleDim;
 
                 checkOptixError(optixAccelBuild(
                     helper->getContext(), stream, &opt, &input, 1, asPtr(tmp),
@@ -89,6 +102,7 @@ public:
                     &res.handle, nullptr, 0));
                 checkCudaError(cuStreamSynchronize(stream));
                 tmp.reset(nullptr);
+                // TODO:Accel Compaction
 
                 mModule = helper->compileFile(modulePath().parent_path() /
                                               "Triangle.ptx");
@@ -109,17 +123,10 @@ public:
                 mRadGroup.reset(group[0]);
                 mOccGroup.reset(group[1]);
 
-                DataDesc data;
-                data.vertex = static_cast<Vec3*>(mVertex.get());
-                data.index = static_cast<Uint3*>(mIndex.get());
-                data.normal = static_cast<Vec3*>(mNormal.get());
-                data.texCoord = static_cast<Vec2*>(mTexCoord.get());
-
-                res.radSBTData = packSBT(mRadGroup.get(), data);
-                res.occSBTData = packSBT(mOccGroup.get(), data);
+                res.radSBTData = packSBTRecord(mRadGroup.get(), data);
+                res.occSBTData = packSBTRecord(mOccGroup.get(), data);
                 res.group.assign(group, group + 2);
                 return res;
-                // TODO:Compaction,Material
             } else {
                 BUS_TRACE_THROW(std::logic_error("unimplemented feature"));
             }

@@ -19,14 +19,6 @@ namespace fs = std::experimental::filesystem;
 using Bus::Unmoveable;
 
 class Config;
-/*
-struct TextureHolder final {
-optix::Buffer data;
-optix::TextureSampler sampler;
-};
-*/
-
-enum class TextureChannel { Float = 1, Float2 = 2, Float4 = 4 };
 
 class PluginHelperAPI : private Unmoveable {
 public:
@@ -34,8 +26,10 @@ public:
     virtual OptixDeviceContext getContext() const = 0;
     virtual bool isDebug() const = 0;
     virtual Module compileFile(const fs::path& path) const = 0;
-    virtual Module compileSource(const std::string& src) const = 0;
+    virtual std::string compileSource(const std::string& src) const = 0;
     virtual Module compile(const std::string& ptx) const = 0;
+    virtual unsigned addCallable(OptixProgramGroup group,
+                                 const Data& sbtData) = 0;
     virtual ~PluginHelperAPI() = default;
 };
 

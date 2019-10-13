@@ -1,38 +1,74 @@
 #include "../../Shared/MaterialAPI.hpp"
+#include "../../Shared/TextureSamplerAPI.hpp"
+#include "DataDesc.hpp"
+#pragma warning(push, 0)
+#include <optix_function_table_definition.h>
+#include <optix_stubs.h>
+#pragma warning(pop)
+
+unsigned loadTexture(Bus::ModuleSystem& sys, std::shared_ptr<Config> cfg,
+                     PluginHelper helper, const char* name,
+                     std::shared_ptr<TextureSampler>& inst) {
+    BUS_TRACE_BEG() {
+        if(!cfg->hasAttr(name))
+            return 0;
+        cfg = cfg->attribute(name);
+        std::string type = cfg->attribute("Plugin")->asString();
+        inst = sys.instantiateByName<TextureSampler>(type);
+        TextureSamplerData data = inst->init(helper, cfg);
+        return helper->addCallable(data.group, data.sbtData);
+    }
+    BUS_TRACE_END();
+}
 
 class Plastic final : public Material {
 private:
-    optix::Material mMat;
-    TextureHolder mKd, mKs, mRoughness;
-    optix::Program mHit;
+    Module mModule;
+    ProgramGroup mGroup;
+    std::shared_ptr<TextureSampler> mKd, mKs, mRoughness;
 
 public:
     explicit Plastic(Bus::ModuleInstance& instance) : Material(instance) {}
-    void init(PluginHelper helper, std::shared_ptr<Config> config) override {
-        mMat = helper->getContext()->createMaterial();
-        mHit = helper->compile(
-            "closestHit",
-            { "BxDF.ptx", "Fresnel.ptx", "Microfact.ptx", "Plastic.ptx" },
-            modulePath().parent_path());
-        mMat->setClosestHitProgram(radianceRayType, mHit);
-        auto bindTexture = [&](const std::string& attr, TextureChannel channel,
-                               TextureHolder& tex) {
-            tex = helper->loadTexture(channel, config->attribute(attr));
-            mMat["material" + attr]->set(tex.sampler);
-        };
-        bindTexture("Kd", TextureChannel::Float4, mKd);
-        bindTexture("Ks", TextureChannel::Float4, mKs);
-        bindTexture("Roughness", TextureChannel::Float2, mRoughness);
-    }
-    optix::Material getMaterial() const override {
-        return mMat;
+    MaterialData init(PluginHelper helper,
+                      std::shared_ptr<Config> config) override {
+        BUS_TRACE_BEG() {
+            PlasticData data;
+            data.kd =
+                loadTexture(this->system(), config, helper, "Diffuse", mKd);
+            data.ks =
+                loadTexture(this->system(), config, helper, "Specular", mKs);
+            data.roughness = loadTexture(this->system(), config, helper,
+                                         "Roughness", mRoughness);
+            mModule =
+                helper->compileFile(modulePath().parent_path() / "Plastic.ptx");
+            OptixProgramGroupDesc desc = {};
+            desc.flags = 0;
+            desc.kind = OPTIX_PROGRAM_GROUP_KIND_CALLABLES;
+            desc.callables.entryFunctionNameCC =
+                "__continuation_callable__sample";
+            desc.callables.moduleCC = mModule.get();
+            OptixProgramGroupOptions opt = {};
+            OptixProgramGroup group;
+            checkOptixError(optixProgramGroupCreate(helper->getContext(), &desc,
+                                                    1, &opt, nullptr, nullptr,
+                                                    &group));
+            mGroup.reset(group);
+            MaterialData res;
+            res.group = group;
+            res.maxSampleDim = 3;
+            res.radData = packSBTRecord(group, data);
+            return res;
+        }
+        BUS_TRACE_END();
     }
 };
 
 class Instance final : public Bus::ModuleInstance {
 public:
     Instance(const fs::path& path, Bus::ModuleSystem& sys)
-        : Bus::ModuleInstance(path, sys) {}
+        : Bus::ModuleInstance(path, sys) {
+        checkOptixError(optixInit());
+    }
     Bus::ModuleInfo info() const override {
         Bus::ModuleInfo res;
         res.name = "Piper.BuiltinMaterial.PBRTv3";

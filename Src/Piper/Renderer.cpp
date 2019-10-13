@@ -4,7 +4,6 @@
 #include "../Shared/GeometryAPI.hpp"
 #include "../Shared/IntegratorAPI.hpp"
 #include "../Shared/LightAPI.hpp"
-#include "../Shared/MaterialAPI.hpp"
 #include "../Shared/SamplerAPI.hpp"
 #include "CameraAdapter.hpp"
 #pragma warning(push, 0)
@@ -16,7 +15,9 @@
 std::unique_ptr<PluginHelperAPI>
 buildPluginHelper(OptixDeviceContext context, const fs::path& scenePath,
                   bool debug, const OptixModuleCompileOptions& MCO,
-                  const OptixPipelineCompileOptions& PCO);
+                  const OptixPipelineCompileOptions& PCO,
+                  std::vector<Data>& cdata,
+                  std::set<OptixProgramGroup>& cgroup);
 
 BUS_MODULE_NAME("Piper.Builtin.Renderer");
 
@@ -141,12 +142,12 @@ std::shared_ptr<Integrator> loadIntegrator(std::shared_ptr<Config> config,
 
 std::shared_ptr<Driver> loadDriver(std::shared_ptr<Config> config,
                                    PluginHelper helper, Bus::ModuleSystem& sys,
-                                   DriverData& data, bool debug) {
+                                   DriverData& data) {
     sys.getReporter().apply(Bus::ReportLevel::Info, "Loading driver",
                             BUS_DEFSRCLOC());
     auto driver =
         sys.instantiateByName<Driver>(config->attribute("Plugin")->asString());
-    data = driver->init(helper, config, debug);
+    data = driver->init(helper, config);
     return driver;
 }
 
@@ -166,6 +167,31 @@ GeometryLib loadGeometries(std::shared_ptr<Config> config, PluginHelper helper,
                                                  "\" has been defined."));
             } else {
                 auto geo = sys.instantiateByName<Geometry>(
+                    cfg->attribute("Plugin")->asString());
+                data.emplace_back(geo->init(helper, cfg));
+                res.emplace(name, geo);
+            }
+        }
+        return res;
+    }
+    BUS_TRACE_END();
+}
+
+using LightLib = std::map<std::string, std::shared_ptr<Light>>;
+
+LightLib loadLights(std::shared_ptr<Config> config, PluginHelper helper,
+                    Bus::ModuleSystem& sys, std::vector<LightData>& data) {
+    sys.getReporter().apply(Bus::ReportLevel::Info, "Loading lights",
+                            BUS_DEFSRCLOC());
+    BUS_TRACE_BEG() {
+        LightLib res;
+        for(auto cfg : config->expand()) {
+            std::string name = cfg->attribute("Name")->asString();
+            if(res.count(name)) {
+                BUS_TRACE_THROW(std::logic_error("Light \"" + name +
+                                                 "\" has been defined."));
+            } else {
+                auto geo = sys.instantiateByName<Light>(
                     cfg->attribute("Plugin")->asString());
                 data.emplace_back(geo->init(helper, cfg));
                 res.emplace(name, geo);
@@ -198,6 +224,7 @@ void renderImpl(std::shared_ptr<Config> config, const fs::path& scenePath,
         if(!debug) {
             checkCudaError(cuCtxSetLimit(CU_LIMIT_PRINTF_FIFO_SIZE, 0));
         }
+
         OptixModuleCompileOptions MCO = {};
         MCO.debugLevel = (debug ? OPTIX_COMPILE_DEBUG_LEVEL_FULL :
                                   OPTIX_COMPILE_DEBUG_LEVEL_NONE);
@@ -212,64 +239,80 @@ void renderImpl(std::shared_ptr<Config> config, const fs::path& scenePath,
         PCO.pipelineLaunchParamsVariableName = "launchParam";
         PCO.traversableGraphFlags =
             OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_SINGLE_GAS;
+        // TODO:motion blur
         PCO.usesMotionBlur = false;
+        // TODO:configurable attribute
         PCO.numAttributeValues = 2;
         PCO.numPayloadValues = 2;
-        std::shared_ptr<PluginHelperAPI> helper =
-            buildPluginHelper(context.get(), scenePath, debug, MCO, PCO);
+        std::set<OptixProgramGroup> groups;
+        std::vector<Data> callableData;
+        std::shared_ptr<PluginHelperAPI> helper = buildPluginHelper(
+            context.get(), scenePath, debug, MCO, PCO, callableData, groups);
+
         auto& reporter = sys.getReporter();
         unsigned msd = 0;
-        std::vector<OptixProgramGroup> groups;
 
         CameraData cdata;
         CameraAdapter camera(config->attribute("Camera"), helper.get(), sys,
                              cdata);
-        groups.emplace_back(cdata.group);
+        groups.insert(cdata.group);
         msd = std::max(msd, cdata.maxSampleDim);
 
         IntegratorData idata;
         std::shared_ptr<Integrator> integrator = loadIntegrator(
             config->attribute("Integrator"), helper.get(), sys, idata);
-        groups.emplace_back(idata.group);
+        groups.insert(idata.group);
         msd = std::max(msd, idata.maxSampleDim);
 
         DriverData ddata;
-        std::shared_ptr<Driver> driver = loadDriver(
-            config->attribute("Driver"), helper.get(), sys, ddata, debug);
-        groups.insert(groups.end(), ddata.group.begin(), ddata.group.end());
+        std::shared_ptr<Driver> driver =
+            loadDriver(config->attribute("Driver"), helper.get(), sys, ddata);
+        groups.insert(ddata.group.begin(), ddata.group.end());
 
         std::vector<GeometryData> gdata;
         GeometryLib geos = loadGeometries(config->attribute("GeometryLib"),
                                           helper.get(), sys, gdata);
         for(auto&& data : gdata) {
-            groups.insert(groups.end(), data.group.begin(), data.group.end());
+            groups.insert(data.group.begin(), data.group.end());
+            msd = std::max(msd, data.maxSampleDim);
+        }
+
+        std::vector<LightData> ldata;
+        LightLib lights =
+            loadLights(config->attribute("LightLib"), helper.get(), sys, ldata);
+        for(auto&& data : ldata) {
+            groups.push_back(data.group);
             msd = std::max(msd, data.maxSampleDim);
         }
 
         SamplerData sdata;
         std::shared_ptr<Sampler> sampler = loadSampler(
             config->attribute("Sampler"), helper.get(), sys, msd, sdata);
-        groups.insert(groups.end(), sdata.group.begin(), sdata.group.end());
+        groups.insert(sdata.group.begin(), sdata.group.end());
 
         reporter.apply(ReportLevel::Info, "Compiling Pipeline",
                        BUS_DEFSRCLOC());
 
+        std::vector<OptixProgramGroup> linearGroup{ groups.begin(),
+                                                    groups.end() };
         OptixPipeline pipe;
         OptixPipelineLinkOptions PLO = {};
         PLO.debugLevel = MCO.debugLevel;
         PLO.maxTraceDepth = 2;
         PLO.overrideUsesMotionBlur = 0;
-        checkOptixError(optixPipelineCreate(
-            context.get(), &PCO, &PLO, groups.data(),
-            static_cast<unsigned>(groups.size()), nullptr, nullptr, &pipe));
+        checkOptixError(
+            optixPipelineCreate(context.get(), &PCO, &PLO, linearGroup.data(),
+                                static_cast<unsigned>(linearGroup.size()),
+                                nullptr, nullptr, &pipe));
         Pipeline pipeline{ pipe };
 
         // TODO:optixPipelineSetStackSize
 
         LaunchParam launchParam;
-        launchParam.lightSbtOffset = 0;
         launchParam.samplerSbtOffset =
-            static_cast<unsigned>(SBTSlot::userOffset);
+            static_cast<unsigned>(SBTSlot::userOffset) + callableData.size();
+        launchParam.lightSbtOffset =
+            launchParam.samplerSbtOffset + static_cast<unsigned>(ldata.size());
         launchParam.root = gdata.front().handle;
 
         OptixShaderBindingTable sbt = {};
@@ -324,8 +367,12 @@ void renderImpl(std::shared_ptr<Config> config, const fs::path& scenePath,
         };
         std::vector<Data> callables(static_cast<unsigned>(SBTSlot::userOffset));
         callables[static_cast<unsigned>(SBTSlot::samplePixel)] = idata.sbtData;
+        callables.insert(callables.end(), callableData.begin(),
+                         callableData.end());
         callables.insert(callables.end(), sdata.sbtData.begin(),
                          sdata.sbtData.end());
+        for(auto&& data : ldata)
+            callables.push_back(data.sbtData);
         auto dHelper = std::make_unique<DriverHelperImpl>(
             camera, sbt, callables, pipe, launchParam);
         driver->doRender(dHelper.get());
