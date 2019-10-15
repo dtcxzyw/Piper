@@ -17,7 +17,7 @@ BUS_MODULE_NAME("Piper.BuiltinGeometry.TriMesh");
 
 class TriMesh final : public Geometry {
 private:
-    Buffer mVertex, mIndex, mNormal, mTexCoord, mAccel, mMat;
+    Buffer mVertex, mIndex, mNormal, mTexCoord, mAccel, mMatIndex;
     Module mModule;
     ProgramGroup mRadGroup, mOccGroup;
     std::shared_ptr<Material> mMat;
@@ -37,7 +37,7 @@ public:
                  mTexCoord, reporter());
 
             auto matCfg = config->attribute("Material");
-            mMat = this->system().instantiateByName(
+            mMat = this->system().instantiateByName<Material>(
                 matCfg->attribute("Plugin")->asString());
             MaterialData matData = mMat->init(helper, matCfg);
             DataDesc data;
@@ -73,10 +73,10 @@ public:
                 arr.preTransform = asPtr(dTrans);
                 // TODO:transform normal
                 arr.primitiveIndexOffset = 0;
-                mMat = allocBuffer(indexSize * sizeof(int));
+                mMatIndex = allocBuffer(indexSize * sizeof(int));
                 checkCudaError(
-                    cuMemsetD32Async(asPtr(mMat), 0, indexSize, stream));
-                arr.sbtIndexOffsetBuffer = asPtr(mMat);
+                    cuMemsetD32Async(asPtr(mMatIndex), 0, indexSize, stream));
+                arr.sbtIndexOffsetBuffer = asPtr(mMatIndex);
                 arr.sbtIndexOffsetSizeInBytes = 4;
                 arr.sbtIndexOffsetStrideInBytes = 0;
                 CUdeviceptr ptr = asPtr(mVertex);

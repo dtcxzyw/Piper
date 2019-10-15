@@ -6,6 +6,8 @@
 #include <optix_stubs.h>
 #pragma warning(pop)
 
+BUS_MODULE_NAME("Piper.BuiltinMaterial.PBRTv3");
+
 unsigned loadTexture(Bus::ModuleSystem& sys, std::shared_ptr<Config> cfg,
                      PluginHelper helper, const char* name,
                      std::shared_ptr<TextureSampler>& inst) {
@@ -71,7 +73,7 @@ public:
     }
     Bus::ModuleInfo info() const override {
         Bus::ModuleInfo res;
-        res.name = "Piper.BuiltinMaterial.PBRTv3";
+        res.name = BUS_DEFAULT_MODULE_NAME;
         res.guid = Bus::str2GUID("{022757A7-3D5C-470C-A056-67A00D3EADD0}");
         res.busVersion = BUS_VERSION;
         res.version = "0.0.1";

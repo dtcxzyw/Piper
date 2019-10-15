@@ -18,7 +18,10 @@ namespace fs = std::experimental::filesystem;
 
 using Bus::Unmoveable;
 
-class Config;
+class ProgramManagerAPI : private Unmoveable {
+public:
+    virtual OptixProgramGroup loadProgram();
+};
 
 class PluginHelperAPI : private Unmoveable {
 public:

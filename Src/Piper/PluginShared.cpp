@@ -38,11 +38,11 @@ public:
                      std::set<OptixProgramGroup>& cgroup)
         : mContext(context), mScenePath(scenePath), mDebug(debug), mMCO(MCO),
           mPCO(PCO), mCData(cdata), mCGroup(cgroup) {}
-    unsigned addCallable(OptixProgramGroup group, const Data& sbtData) const {
-        mGroup.insert(group);
-        unsigned res = static_cast<unsigned>(mSBTData.size()) +
+    unsigned addCallable(OptixProgramGroup group, const Data& sbtData) {
+        mCGroup.insert(group);
+        unsigned res = static_cast<unsigned>(mCData.size()) +
             static_cast<unsigned>(SBTSlot::userOffset);
-        mSBTData.push_back(sbtData);
+        mCData.push_back(sbtData);
         return res;
     }
     OptixDeviceContext getContext() const override {

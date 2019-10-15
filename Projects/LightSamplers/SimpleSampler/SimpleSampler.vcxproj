@@ -86,6 +86,7 @@
       <SDLCheck>true</SDLCheck>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp17</LanguageStandard>
+      <PreprocessorDefinitions>_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -111,6 +112,7 @@
       <SDLCheck>true</SDLCheck>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp17</LanguageStandard>
+      <PreprocessorDefinitions>_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -139,7 +141,17 @@
     <ClInclude Include="..\..\..\Src\LightSamplers\SimpleSampler\DataDesc.hpp" />
   </ItemGroup>
   <ItemGroup>
-    <None Include="..\..\..\Src\LightSamplers\SimpleSampler\Sampler.cu" />
+    <CustomBuild Include="..\..\..\Src\LightSamplers\SimpleSampler\Sampler.cu">
+      <FileType>Document</FileType>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">nvcc %(FullPath) -o $(TargetDir)%(Filename).ptx  -I "$(CUDA_PATH)\include";"$(OPTIX_PATH)\include" -ptx -O2 -m64 -arch=sm_50 -use_fast_math -w -rdc=true </Command>
+      <Message Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">build %(Filename) PTX</Message>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">$(TargetDir)%(Filename).ptx</Outputs>
+      <BuildInParallel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</BuildInParallel>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Release|x64'">nvcc %(FullPath) -o $(TargetDir)%(Filename).ptx  -I "$(CUDA_PATH)\include";"$(OPTIX_PATH)\include" -ptx -O2 -m64 -arch=sm_50 -use_fast_math -w -rdc=true </Command>
+      <Message Condition="'$(Configuration)|$(Platform)'=='Release|x64'">build %(Filename) PTX</Message>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='Release|x64'">$(TargetDir)%(Filename).ptx</Outputs>
+      <BuildInParallel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</BuildInParallel>
+    </CustomBuild>
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

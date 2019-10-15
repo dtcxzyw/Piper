@@ -55,7 +55,7 @@ public:
         res.guid = Bus::str2GUID("{11E4DC1D-3874-44F6-8C16-5E7559552D16}");
         res.busVersion = BUS_VERSION;
         res.version = "0.0.1";
-        res.description = "SimpleSampler";
+        res.description = "SimpleLightSampler";
         res.copyright = "Copyright (c) 2019 Zheng Yingwei";
         res.modulePath = getModulePath();
         return res;

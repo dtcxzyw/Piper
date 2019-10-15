@@ -7,6 +7,9 @@
 
 BUS_MODULE_NAME("Piper.BuiltinTextureSampler.BuiltinSampler");
 
+// TODO:Program Manager
+OptixProgramGroup last = 0;
+
 class ConstantColor final : public TextureSampler {
 private:
     Module mProg;
@@ -19,23 +22,32 @@ public:
                             std::shared_ptr<Config> cfg) override {
         BUS_TRACE_BEG() {
             Constant data;
-            data.color = cfg->attribute("color")->asVec3();
-            mProg = helper->compileFile(modulePath().parent_path() /
-                                        "Constant.ptx");
-            OptixProgramGroupDesc desc = {};
-            desc.kind = OPTIX_PROGRAM_GROUP_KIND_CALLABLES;
-            desc.callables.moduleDC = mProg.get();
-            desc.callables.entryFunctionNameDC = "__direct_callable__tex";
-            OptixProgramGroupOptions opt = {};
-            OptixProgramGroup group;
-            checkOptixError(optixProgramGroupCreate(helper->getContext(), &desc,
-                                                    1, &opt, nullptr, nullptr,
-                                                    &group));
-            mProgramGroup.reset(group);
-            TextureSamplerData res;
-            res.sbtData = packSBTRecord(mProgramGroup.get(), data);
-            res.group = mProgramGroup.get();
-            return res;
+            data.color = cfg->attribute("Color")->asVec3();
+            if(last) {
+                TextureSamplerData res;
+                res.group = last;
+                res.sbtData = packSBTRecord(last, data);
+                return res;
+            } else {
+                mProg = helper->compileFile(modulePath().parent_path() /
+                                            "Constant.ptx");
+                OptixProgramGroupDesc desc = {};
+                desc.flags = 0;
+                desc.kind = OPTIX_PROGRAM_GROUP_KIND_CALLABLES;
+                desc.callables.moduleDC = mProg.get();
+                desc.callables.entryFunctionNameDC = "__direct_callable__tex";
+                OptixProgramGroupOptions opt = {};
+                OptixProgramGroup group;
+                checkOptixError(optixProgramGroupCreate(helper->getContext(),
+                                                        &desc, 1, &opt, nullptr,
+                                                        nullptr, &group));
+                mProgramGroup.reset(group);
+                TextureSamplerData res;
+                res.sbtData = packSBTRecord(group, data);
+                res.group = group;
+                last = group;
+                return res;
+            }
         }
         BUS_TRACE_END();
     }

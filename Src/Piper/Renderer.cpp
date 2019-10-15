@@ -4,6 +4,7 @@
 #include "../Shared/GeometryAPI.hpp"
 #include "../Shared/IntegratorAPI.hpp"
 #include "../Shared/LightAPI.hpp"
+#include "../Shared/LightSamplerAPI.hpp"
 #include "../Shared/SamplerAPI.hpp"
 #include "CameraAdapter.hpp"
 #pragma warning(push, 0)
@@ -202,6 +203,19 @@ LightLib loadLights(std::shared_ptr<Config> config, PluginHelper helper,
     BUS_TRACE_END();
 }
 
+std::shared_ptr<LightSampler> loadLightSampler(std::shared_ptr<Config> config,
+                                               PluginHelper helper,
+                                               Bus::ModuleSystem& sys,
+                                               size_t lightNum,
+                                               LightSamplerData& data) {
+    sys.getReporter().apply(Bus::ReportLevel::Info, "Loading light sampler",
+                            BUS_DEFSRCLOC());
+    auto sampler = sys.instantiateByName<LightSampler>(
+        config->attribute("Plugin")->asString());
+    data = sampler->init(helper, config, lightNum);
+    return sampler;
+}
+
 std::shared_ptr<Sampler> loadSampler(std::shared_ptr<Config> config,
                                      PluginHelper helper,
                                      Bus::ModuleSystem& sys, unsigned msd,
@@ -281,9 +295,17 @@ void renderImpl(std::shared_ptr<Config> config, const fs::path& scenePath,
         LightLib lights =
             loadLights(config->attribute("LightLib"), helper.get(), sys, ldata);
         for(auto&& data : ldata) {
-            groups.push_back(data.group);
+            groups.insert(data.group);
             msd = std::max(msd, data.maxSampleDim);
         }
+
+        // TODO:LightSamplerHelper
+        LightSamplerData lsdata;
+        std::shared_ptr<LightSampler> lightSampler =
+            loadLightSampler(config->attribute("LightSampler"), helper.get(),
+                             sys, lights.size(), lsdata);
+        groups.insert(lsdata.group);
+        msd = std::max(msd, lsdata.maxSampleDim);
 
         SamplerData sdata;
         std::shared_ptr<Sampler> sampler = loadSampler(
@@ -310,9 +332,9 @@ void renderImpl(std::shared_ptr<Config> config, const fs::path& scenePath,
 
         LaunchParam launchParam;
         launchParam.samplerSbtOffset =
-            static_cast<unsigned>(SBTSlot::userOffset) + callableData.size();
-        launchParam.lightSbtOffset =
-            launchParam.samplerSbtOffset + static_cast<unsigned>(ldata.size());
+            static_cast<unsigned>(SBTSlot::userOffset) +
+            static_cast<unsigned>(callableData.size());
+        launchParam.lightSbtOffset = launchParam.samplerSbtOffset + msd;
         launchParam.root = gdata.front().handle;
 
         OptixShaderBindingTable sbt = {};
@@ -367,6 +389,8 @@ void renderImpl(std::shared_ptr<Config> config, const fs::path& scenePath,
         };
         std::vector<Data> callables(static_cast<unsigned>(SBTSlot::userOffset));
         callables[static_cast<unsigned>(SBTSlot::samplePixel)] = idata.sbtData;
+        callables[static_cast<unsigned>(SBTSlot::sampleOneLight)] =
+            lsdata.sbtData;
         callables.insert(callables.end(), callableData.begin(),
                          callableData.end());
         callables.insert(callables.end(), sdata.sbtData.begin(),

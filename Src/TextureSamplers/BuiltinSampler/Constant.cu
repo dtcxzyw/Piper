@@ -2,5 +2,6 @@
 #include "DataDesc.hpp"
 
 DEVICE Spectrum __direct_callable__tex(Vec2) {
-    return getSBTData<Constant>()->color;
+    auto data = getSBTData<Constant>();
+    return data->color;
 }

@@ -1,5 +1,5 @@
 #pragma once
-#include "../../Shared/KernelShared.hpp"
+#include "../../Shared/Shared.hpp"
 
 struct DataDesc final {
     unsigned lightNum;
