@@ -7,13 +7,19 @@ GLOBAL void __closesthit__RCH() {
     float u = uv.x, v = uv.y, w = 1.0f - u - v;
     Payload* payload = getPayload();
     Uint3 idx = data->index[optixGetPrimitiveIndex()];
-    Vec3 p0 = data->vertex[0], p1 = data->vertex[1], p2 = data->vertex[2];
+    Vec3 p0 = f2v(
+             optixTransformPointFromObjectToWorldSpace(v2f(data->vertex[0]))),
+         p1 = f2v(
+             optixTransformPointFromObjectToWorldSpace(v2f(data->vertex[1]))),
+         p2 = f2v(
+             optixTransformPointFromObjectToWorldSpace(v2f(data->vertex[2])));
     Vec3 ng = glm::cross(p1 - p0, p2 - p0);
     bool front = optixIsTriangleFrontFaceHit();
     Vec3 ns;
     if(data->normal) {
         ns = data->normal[idx.x] * u + data->normal[idx.y] * v +
             data->normal[idx.z] * w;
+        ns = f2v(optixTransformNormalFromObjectToWorldSpace(v2f(ns)));
         ns = (glm::dot(ns, ng) > 0.0f ? ns : -ns);
     } else
         ns = ng;

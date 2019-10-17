@@ -16,39 +16,39 @@ private:
     fs::path mOutput;
     unsigned mSample, mWidth, mHeight;
     bool mFiltBadColor;
-    Module mModule;
     ProgramGroup mMissRad, mMissOcc, mRayGen, mException;
 
 public:
     explicit FixedSampler(Bus::ModuleInstance& instance) : Driver(instance) {}
-    DriverData init(PluginHelper helper, std::shared_ptr<Config> config) override {
+    DriverData init(PluginHelper helper,
+                    std::shared_ptr<Config> config) override {
         BUS_TRACE_BEG() {
             mOutput = config->attribute("Output")->asString();
             mSample = config->attribute("Sample")->asUint();
             mWidth = config->attribute("Width")->asUint();
             mHeight = config->attribute("Height")->asUint();
             mFiltBadColor = config->getBool("FiltBadColor", false);
-            mModule =
-                helper->compileFile(modulePath().parent_path() / "Kernel.ptx");
+            OptixModule mod = helper->loadModuleFromFile(
+                modulePath().parent_path() / "Kernel.ptx");
             OptixProgramGroupDesc desc[4] = {};
             desc[0].flags = 0;
             desc[0].kind = OPTIX_PROGRAM_GROUP_KIND_RAYGEN;
             desc[0].raygen.entryFunctionName = "__raygen__renderKernel";
-            desc[0].raygen.module = mModule.get();
+            desc[0].raygen.module = mod;
             desc[1].flags = 0;
             desc[1].kind = OPTIX_PROGRAM_GROUP_KIND_EXCEPTION;
             desc[1].exception.entryFunctionName =
                 (helper->isDebug() ? "__exception__default" :
                                      "__exception__silence");
-            desc[1].exception.module = mModule.get();
+            desc[1].exception.module = mod;
             desc[2].flags = 0;
             desc[2].kind = OPTIX_PROGRAM_GROUP_KIND_MISS;
             desc[2].miss.entryFunctionName = "__miss__rad";
-            desc[2].miss.module = mModule.get();
+            desc[2].miss.module = mod;
             desc[3].flags = 0;
             desc[3].kind = OPTIX_PROGRAM_GROUP_KIND_MISS;
             desc[3].miss.entryFunctionName = "__miss__occ";
-            desc[3].miss.module = mModule.get();
+            desc[3].miss.module = mod;
             OptixProgramGroup groups[4];
             OptixProgramGroupOptions opt = {};
             checkOptixError(optixProgramGroupCreate(
@@ -75,8 +75,8 @@ public:
             data.outputBuffer = static_cast<Vec4*>(output.get());
             for(unsigned i = 0; i < mSample; ++i) {
                 data.sampleIdx = i;
-                Buffer rayGenSBT = uploadData(helper->getStream(),
-                                              packSBTRecord(mRayGen.get(), data));
+                Buffer rayGenSBT = uploadData(
+                    helper->getStream(), packSBTRecord(mRayGen.get(), data));
                 Buffer exceptionSBT = uploadData(
                     helper->getStream(), packEmptySBTRecord(mException.get()));
                 Data missRadSBT = packEmptySBTRecord(mMissRad.get());

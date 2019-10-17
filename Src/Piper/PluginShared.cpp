@@ -2,6 +2,7 @@
 #include "../Shared/ConfigAPI.hpp"
 #include <fstream>
 #include <sstream>
+#include <unordered_map>
 #pragma warning(push, 0)
 #include <nvrtc.h>
 #include <optix_stubs.h>
@@ -20,6 +21,14 @@ static std::string loadPTX(const fs::path& path) {
     BUS_TRACE_END();
 }
 
+struct ModuleDeleter final {
+    void operator()(OptixModule mod) const {
+        checkOptixError(optixModuleDestroy(mod));
+    }
+};
+
+using Module = std::unique_ptr<OptixModule_t, ModuleDeleter>;
+
 class PluginHelperImpl final : public PluginHelperAPI {
 private:
     OptixDeviceContext mContext;
@@ -29,6 +38,7 @@ private:
     OptixPipelineCompileOptions mPCO;
     std::vector<Data>& mCData;
     std::set<OptixProgramGroup>& mCGroup;
+    std::unordered_map<std::string, Module> mModules;
 
 public:
     PluginHelperImpl(OptixDeviceContext context, const fs::path& scenePath,
@@ -54,20 +64,24 @@ public:
     bool isDebug() const override {
         return mDebug;
     }
-    Module compile(const std::string& ptx) const override {
+    OptixModule loadModuleFromPTX(const std::string& ptx) override {
         BUS_TRACE_BEG() {
-            OptixModule mod;
-            checkOptixError(optixModuleCreateFromPTX(mContext, &mMCO, &mPCO,
-                                                     ptx.c_str(), ptx.size(),
-                                                     nullptr, nullptr, &mod));
-            return Module{ mod };
+            Module& mod = mModules[ptx];
+            if(!mod) {
+                OptixModule handle;
+                checkOptixError(optixModuleCreateFromPTX(
+                    mContext, &mMCO, &mPCO, ptx.c_str(), ptx.size(), nullptr,
+                    nullptr, &handle));
+                mod.reset(handle);
+            }
+            return mod.get();
         }
         BUS_TRACE_END();
     }
-    Module compileFile(const fs::path& file) const override {
-        return compile(loadPTX(file));
+    OptixModule loadModuleFromFile(const fs::path& file) override {
+        return loadModuleFromPTX(loadPTX(file));
     }
-    std::string compileSource(const std::string& src) const override;
+    OptixModule loadModuleFromSrc(const std::string& src) override;
 };
 
 std::unique_ptr<PluginHelperAPI>
@@ -94,7 +108,7 @@ struct NVRTCProgramDeleter final {
 
 static const char* header = R"#()#";
 
-std::string PluginHelperImpl::compileSource(const std::string& src) const {
+OptixModule PluginHelperImpl::loadModuleFromSrc(const std::string& src) {
     BUS_TRACE_BEG() {
         // TODO:PTX Caching
         using Program = std::unique_ptr<_nvrtcProgram, NVRTCProgramDeleter>;
@@ -125,7 +139,7 @@ std::string PluginHelperImpl::compileSource(const std::string& src) const {
         checkNVRTCError(nvrtcGetPTXSize(program.get(), &siz));
         std::string ptx(siz, '#');
         checkNVRTCError(nvrtcGetPTX(program.get(), ptx.data()));
-        return ptx;
+        return loadModuleFromPTX(ptx);
     }
     BUS_TRACE_END();
 }

@@ -9,7 +9,6 @@ BUS_MODULE_NAME("Piper.BuiltinIntegrator.PathTracer");
 
 class PathTracer final : public Integrator {
 private:
-    Module mModule;
     ProgramGroup mGroup;
 
 public:
@@ -17,14 +16,14 @@ public:
     IntegratorData init(PluginHelper helper,
                         std::shared_ptr<Config> config) override {
         BUS_TRACE_BEG() {
-            mModule = helper->compileFile(modulePath().parent_path() /
-                                          "PathKernel.ptx");
+            OptixModule mod = helper->loadModuleFromFile(
+                modulePath().parent_path() / "PathKernel.ptx");
             OptixProgramGroupDesc desc = {};
             desc.kind = OPTIX_PROGRAM_GROUP_KIND_CALLABLES;
             desc.flags = 0;
             desc.callables.entryFunctionNameCC =
                 "__continuation_callable__traceKernel";
-            desc.callables.moduleCC = mModule.get();
+            desc.callables.moduleCC = mod;
             OptixProgramGroupOptions opt = {};
             OptixProgramGroup group;
             checkOptixError(optixProgramGroupCreate(helper->getContext(), &desc,

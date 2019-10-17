@@ -32,15 +32,6 @@ static Bus::ReportFunction colorOutput(std::ostream& out, rang::fg col,
                                        const char* pre, bool inDetail = false) {
     return [&](Bus::ReportLevel, const std::string& message,
                const Bus::SourceLocation& srcLoc) {
-        /*
-        if(pre == std::string("Error")) {
-            try {
-                throw std::runtime_error(message);
-            } catch(...) {
-                std::throw_with_nested(srcLoc);
-            }
-        }
-        */
 
         out << col;
         if(inDetail) {

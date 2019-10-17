@@ -213,7 +213,6 @@ std::string generateSoruce(unsigned maxDim, std::shared_ptr<Config> config,
 class Halton final : public Sampler {
 private:
     std::vector<ProgramGroup> mPrograms;
-    Module mModule;
 
 public:
     explicit Halton(Bus::ModuleInstance& instance) : Sampler(instance) {}
@@ -223,7 +222,7 @@ public:
             std::string src = generateSoruce(maxDim, config, reporter());
             reporter().apply(ReportLevel::Debug, "Source:\n" + src,
                              BUS_DEFSRCLOC());
-            mModule = helper->compile(helper->compileSource(src));
+            OptixModule mod = helper->loadModuleFromSrc(src);
             std::vector<std::string> funcNames;
             std::vector<OptixProgramGroupDesc> descs;
             for(unsigned i = 0; i < maxDim; ++i) {
@@ -232,7 +231,7 @@ public:
                 OptixProgramGroupDesc desc = {};
                 desc.flags = 0;
                 desc.kind = OPTIX_PROGRAM_GROUP_KIND_CALLABLES;
-                desc.callables.moduleDC = mModule.get();
+                desc.callables.moduleDC = mod;
                 desc.callables.entryFunctionNameDC = funcNames.back().c_str();
                 descs.emplace_back(desc);
             }

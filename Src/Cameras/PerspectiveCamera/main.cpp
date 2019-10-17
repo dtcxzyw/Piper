@@ -9,7 +9,6 @@ BUS_MODULE_NAME("Piper.BuiltinCamera.PerspectiveCamera");
 
 class PerspectiveCamera final : public Camera {
 private:
-    Module mModule;
     ProgramGroup mGroup;
     Vec2 mSensor;
 
@@ -21,12 +20,12 @@ public:
         BUS_TRACE_BEG() {
             mSensor = device->attribute("Sensor")->asVec2();
             mSensor /= 1e3f;
-            mModule =
-                helper->compileFile(modulePath().parent_path() / "RayGen.ptx");
+            OptixModule mod = helper->loadModuleFromFile(
+                modulePath().parent_path() / "RayGen.ptx");
             OptixProgramGroupDesc desc = {};
             desc.flags = 0;
             desc.kind = OPTIX_PROGRAM_GROUP_KIND_CALLABLES;
-            desc.callables.moduleDC = mModule.get();
+            desc.callables.moduleDC = mod;
             desc.callables.entryFunctionNameDC = "__direct_callable__sampleRay";
             OptixProgramGroupOptions opt = {};
             OptixProgramGroup group;

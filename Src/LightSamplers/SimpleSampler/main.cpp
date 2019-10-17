@@ -9,7 +9,6 @@ BUS_MODULE_NAME("Piper.BuiltinLightSampler.SimpleSampler");
 
 class UniformSampler final : public LightSampler {
 private:
-    Module mProg;
     ProgramGroup mProgramGroup;
 
 public:
@@ -20,11 +19,11 @@ public:
         BUS_TRACE_BEG() {
             DataDesc data;
             data.lightNum = static_cast<unsigned>(lightNum);
-            mProg =
-                helper->compileFile(modulePath().parent_path() / "Sampler.ptx");
+            OptixModule mod = helper->loadModuleFromFile(
+                modulePath().parent_path() / "Sampler.ptx");
             OptixProgramGroupDesc desc = {};
             desc.kind = OPTIX_PROGRAM_GROUP_KIND_CALLABLES;
-            desc.callables.moduleCC = mProg.get();
+            desc.callables.moduleCC = mod;
             desc.callables.entryFunctionNameCC =
                 "__continuation_callable__sample";
             OptixProgramGroupOptions opt = {};

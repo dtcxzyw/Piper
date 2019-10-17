@@ -9,7 +9,6 @@ BUS_MODULE_NAME("Piper.BuiltinLight.SimpleLight");
 
 class DirectionalLight final : public Light {
 private:
-    Module mProg;
     ProgramGroup mProgramGroup;
 
 public:
@@ -22,11 +21,11 @@ public:
             data.direction =
                 glm::normalize(cfg->attribute("Direction")->asVec3());
             data.distance = cfg->attribute("Distance")->asFloat() - (1e-8f);
-            mProg = helper->compileFile(modulePath().parent_path() /
-                                        "DirLight.ptx");
+            OptixModule mod = helper->loadModuleFromFile(
+                modulePath().parent_path() / "DirLight.ptx");
             OptixProgramGroupDesc desc = {};
             desc.kind = OPTIX_PROGRAM_GROUP_KIND_CALLABLES;
-            desc.callables.moduleCC = mProg.get();
+            desc.callables.moduleCC = mod;
             desc.callables.entryFunctionNameCC =
                 "__continuation_callable__sample";
             OptixProgramGroupOptions opt = {};

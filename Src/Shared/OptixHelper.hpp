@@ -109,14 +109,6 @@ inline std::vector<T> downloadData(const Buffer& buf, size_t offsetByte,
     return res;
 }
 
-struct ModuleDeleter final {
-    void operator()(OptixModule mod) const {
-        checkOptixError(optixModuleDestroy(mod));
-    }
-};
-
-using Module = std::unique_ptr<OptixModule_t, ModuleDeleter>;
-
 struct ProgramGroupDeleter final {
     void operator()(OptixProgramGroup mod) const {
         checkOptixError(optixProgramGroupDestroy(mod));

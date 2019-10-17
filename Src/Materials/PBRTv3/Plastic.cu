@@ -27,10 +27,12 @@ DEVICE void __continuation_callable__sample(Payload* payload, Vec3 dir,
     if(fpdf >= eps)
         payload->f = (lr.f(wo, wi) + mr.f(wo, wi)) * (absCosTheta(wi) / fpdf);
     payload->wi = s2w * wi;
+    payload->ori = hit + frontOffset;
     LightSample ls = sampleOneLight(payload->ori, rayTime, payload->index);
     wi = w2s * ls.wi;
     float lpdf = 0.5f * (lr.pdf(wo, wi) + mr.pdf(wo, wi));
     if(lpdf >= eps)
-        payload->rad = ls.rad * (lr.f(wo, wi) + mr.f(wo, wi)) *
-            (absCosTheta(wi) / lpdf);
+        payload->rad =
+            ls.rad * (lr.f(wo, wi) + mr.f(wo, wi)) * (absCosTheta(wi) / lpdf);
+    payload->hit = true;
 }

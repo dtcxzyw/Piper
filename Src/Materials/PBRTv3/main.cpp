@@ -25,7 +25,6 @@ unsigned loadTexture(Bus::ModuleSystem& sys, std::shared_ptr<Config> cfg,
 
 class Plastic final : public Material {
 private:
-    Module mModule;
     ProgramGroup mGroup;
     std::shared_ptr<TextureSampler> mKd, mKs, mRoughness;
 
@@ -41,14 +40,14 @@ public:
                 loadTexture(this->system(), config, helper, "Specular", mKs);
             data.roughness = loadTexture(this->system(), config, helper,
                                          "Roughness", mRoughness);
-            mModule =
-                helper->compileFile(modulePath().parent_path() / "Plastic.ptx");
+            OptixModule mod = helper->loadModuleFromFile(
+                modulePath().parent_path() / "Plastic.ptx");
             OptixProgramGroupDesc desc = {};
             desc.flags = 0;
             desc.kind = OPTIX_PROGRAM_GROUP_KIND_CALLABLES;
             desc.callables.entryFunctionNameCC =
                 "__continuation_callable__sample";
-            desc.callables.moduleCC = mModule.get();
+            desc.callables.moduleCC = mod;
             OptixProgramGroupOptions opt = {};
             OptixProgramGroup group;
             checkOptixError(optixProgramGroupCreate(helper->getContext(), &desc,
