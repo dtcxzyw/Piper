@@ -1,3 +1,4 @@
+#include "../../Shared/ConfigAPI.hpp"
 #include "../../Shared/LightAPI.hpp"
 #include "DataDesc.hpp"
 #pragma warning(push, 0)
@@ -10,11 +11,12 @@ BUS_MODULE_NAME("Piper.BuiltinLight.SimpleLight");
 class DirectionalLight final : public Light {
 private:
     ProgramGroup mProgramGroup;
+    LightData mData;
 
 public:
     explicit DirectionalLight(Bus::ModuleInstance& instance)
         : Light(instance) {}
-    LightData init(PluginHelper helper, std::shared_ptr<Config> cfg) override {
+    void init(PluginHelper helper, std::shared_ptr<Config> cfg) override {
         BUS_TRACE_BEG() {
             DirLight data;
             data.lum = cfg->attribute("Lum")->asVec3();
@@ -34,13 +36,14 @@ public:
                                                     1, &opt, nullptr, nullptr,
                                                     &group));
             mProgramGroup.reset(group);
-            LightData res;
-            res.sbtData = packSBTRecord(mProgramGroup.get(), data);
-            res.maxSampleDim = 0;
-            res.group = mProgramGroup.get();
-            return res;
+            mData.sbtData = packSBTRecord(mProgramGroup.get(), data);
+            mData.maxSampleDim = 0;
+            mData.group = mProgramGroup.get();
         }
         BUS_TRACE_END();
+    }
+    LightData getData() override {
+        return mData;
     }
 };
 

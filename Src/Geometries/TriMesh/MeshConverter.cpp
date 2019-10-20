@@ -11,7 +11,7 @@
 #include "../../Shared/CommandAPI.hpp"
 
 namespace fs = std::experimental::filesystem;
-BUS_MODULE_NAME("Piper.BuiltinGeometry.TriMesh");
+BUS_MODULE_NAME("Piper.BuiltinGeometry.TriMesh.MeshConverter");
 
 template <typename T>
 void read(const std::vector<char>& stream, uint64_t& offset, T* ptr,
@@ -45,8 +45,8 @@ void saveLZ4(const fs::path& path, const std::vector<char>& data) {
 int cast(int argc, char** argv, Bus::Reporter& reporter) {
     BUS_TRACE_BEG() {
         cxxopts::Options opt("MeshConverter", "TriMesh::MeshConverter");
-        opt.add_options()("t,tool", "", cxxopts::value<std::string>())(
-            "i,input", "mesh file path", cxxopts::value<fs::path>())(
+        opt.add_options()("i,input", "mesh file path",
+                          cxxopts::value<fs::path>())(
             "o,output", "output path", cxxopts::value<fs::path>());
         auto res = opt.parse(argc, argv);
         if(!(res.count("input") && res.count("output"))) {
@@ -90,7 +90,7 @@ int cast(int argc, char** argv, Bus::Reporter& reporter) {
             reporter.apply(ReportLevel::Info, "Has texCoords.",
                            BUS_DEFSRCLOC());
         }
-        const uint64_t vertSize = mesh->mNumVertices;
+        const uint32_t vertSize = mesh->mNumVertices;
         write(data, &vertSize);
         write(data, &flag);
         write(data, mesh->mVertices, vertSize);
@@ -99,7 +99,7 @@ int cast(int argc, char** argv, Bus::Reporter& reporter) {
         if(mesh->HasTextureCoords(0)) {
             std::vector<aiVector2D> texCoords(vertSize);
             aiVector3D* ptr = mesh->mTextureCoords[0];
-            for(uint64_t i = 0; i < vertSize; ++i)
+            for(uint32_t i = 0; i < vertSize; ++i)
                 texCoords[i] = aiVector2D(ptr[i].x, ptr[i].y);
             write(data, texCoords.data(), vertSize);
         }
@@ -107,7 +107,7 @@ int cast(int argc, char** argv, Bus::Reporter& reporter) {
             std::vector<Uint3> buf(mesh->mNumFaces);
             for(auto i = 0U; i < mesh->mNumFaces; ++i)
                 buf[i] = *reinterpret_cast<Uint3*>(mesh->mFaces[i].mIndices);
-            const uint64_t faceSize = mesh->mNumFaces;
+            const uint32_t faceSize = mesh->mNumFaces;
             write(data, &faceSize);
             write(data, buf.data(), buf.size());
         }
@@ -129,6 +129,6 @@ public:
 };
 
 std::shared_ptr<Bus::ModuleFunctionBase>
-getCommand(Bus::ModuleInstance& instance) {
+getMesh2Raw(Bus::ModuleInstance& instance) {
     return std::make_shared<MeshConverter>(instance);
 }

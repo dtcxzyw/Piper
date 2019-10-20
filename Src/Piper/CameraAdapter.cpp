@@ -1,4 +1,5 @@
 #include "CameraAdapter.hpp"
+#include "../Shared/ConfigAPI.hpp"
 
 BUS_MODULE_NAME("Piper.Builtin.CameraAdapter");
 

@@ -1,4 +1,5 @@
 #include "../../Shared/CameraAPI.hpp"
+#include "../../Shared/ConfigAPI.hpp"
 #include "DataDesc.hpp"
 #pragma warning(push, 0)
 #include <optix_function_table_definition.h>

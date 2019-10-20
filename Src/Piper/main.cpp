@@ -1,5 +1,6 @@
 #include "../Shared/CommandAPI.hpp"
 #include "../Shared/ConfigAPI.hpp"
+#include "../Shared/GeometryAPI.hpp"
 #pragma warning(push, 0)
 #include "../ThirdParty/Bus/BusSystem.hpp"
 #include <rang.hpp>
@@ -32,7 +33,6 @@ static Bus::ReportFunction colorOutput(std::ostream& out, rang::fg col,
                                        const char* pre, bool inDetail = false) {
     return [&](Bus::ReportLevel, const std::string& message,
                const Bus::SourceLocation& srcLoc) {
-
         out << col;
         if(inDetail) {
             out << pre << ':' << message << std::endl;
@@ -92,6 +92,8 @@ std::shared_ptr<Bus::ModuleFunctionBase>
 makeJsonConfig(Bus::ModuleInstance& instance);
 std::shared_ptr<Bus::ModuleFunctionBase>
 makeRenderer(Bus::ModuleInstance& instance);
+std::shared_ptr<Bus::ModuleFunctionBase>
+makeNode(Bus::ModuleInstance& instance);
 
 class BuiltinFunction final : public Bus::ModuleInstance {
 public:
@@ -112,6 +114,8 @@ public:
             return { "JsonConfig" };
         if(api == Command::getInterface())
             return { "Renderer" };
+        if(api == Geometry::getInterface())
+            return { "Node" };
         return {};
     }
     std::shared_ptr<Bus::ModuleFunctionBase> instantiate(Name name) override {
@@ -119,6 +123,8 @@ public:
             return makeJsonConfig(*this);
         if(name == "Renderer")
             return makeRenderer(*this);
+        if(name == "Node")
+            return makeNode(*this);
         return nullptr;
     }
 };

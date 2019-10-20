@@ -1,3 +1,4 @@
+#include "../../Shared/ConfigAPI.hpp"
 #include "../../Shared/MaterialAPI.hpp"
 #include "../../Shared/TextureSamplerAPI.hpp"
 #include "DataDesc.hpp"
@@ -8,16 +9,14 @@
 
 BUS_MODULE_NAME("Piper.BuiltinMaterial.PBRTv3");
 
-unsigned loadTexture(Bus::ModuleSystem& sys, std::shared_ptr<Config> cfg,
-                     PluginHelper helper, const char* name,
-                     std::shared_ptr<TextureSampler>& inst) {
+unsigned loadTexture(std::shared_ptr<Config> cfg, PluginHelper helper,
+                     const char* name, std::shared_ptr<TextureSampler>& inst) {
     BUS_TRACE_BEG() {
         if(!cfg->hasAttr(name))
             return 0;
         cfg = cfg->attribute(name);
-        std::string type = cfg->attribute("Plugin")->asString();
-        inst = sys.instantiateByName<TextureSampler>(type);
-        TextureSamplerData data = inst->init(helper, cfg);
+        inst = helper->instantiateAsset<TextureSampler>(cfg);
+        TextureSamplerData data = inst->getData();
         return helper->addCallable(data.group, data.sbtData);
     }
     BUS_TRACE_END();
@@ -27,19 +26,17 @@ class Plastic final : public Material {
 private:
     ProgramGroup mGroup;
     std::shared_ptr<TextureSampler> mKd, mKs, mRoughness;
+    MaterialData mData;
 
 public:
     explicit Plastic(Bus::ModuleInstance& instance) : Material(instance) {}
-    MaterialData init(PluginHelper helper,
-                      std::shared_ptr<Config> config) override {
+    void init(PluginHelper helper, std::shared_ptr<Config> config) override {
         BUS_TRACE_BEG() {
             PlasticData data;
-            data.kd =
-                loadTexture(this->system(), config, helper, "Diffuse", mKd);
-            data.ks =
-                loadTexture(this->system(), config, helper, "Specular", mKs);
-            data.roughness = loadTexture(this->system(), config, helper,
-                                         "Roughness", mRoughness);
+            data.kd = loadTexture(config, helper, "Diffuse", mKd);
+            data.ks = loadTexture(config, helper, "Specular", mKs);
+            data.roughness =
+                loadTexture(config, helper, "Roughness", mRoughness);
             OptixModule mod = helper->loadModuleFromFile(
                 modulePath().parent_path() / "Plastic.ptx");
             OptixProgramGroupDesc desc = {};
@@ -54,13 +51,14 @@ public:
                                                     1, &opt, nullptr, nullptr,
                                                     &group));
             mGroup.reset(group);
-            MaterialData res;
-            res.group = group;
-            res.maxSampleDim = 3;
-            res.radData = packSBTRecord(group, data);
-            return res;
+            mData.group = group;
+            mData.maxSampleDim = 3;
+            mData.radData = packSBTRecord(group, data);
         }
         BUS_TRACE_END();
+    }
+    MaterialData getData() override {
+        return mData;
     }
 };
 

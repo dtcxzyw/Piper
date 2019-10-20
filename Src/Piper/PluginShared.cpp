@@ -32,28 +32,82 @@ using Module = std::unique_ptr<OptixModule_t, ModuleDeleter>;
 class PluginHelperImpl final : public PluginHelperAPI {
 private:
     OptixDeviceContext mContext;
+    Bus::ModuleSystem& mSys;
     fs::path mScenePath;
     bool mDebug;
     OptixModuleCompileOptions mMCO;
     OptixPipelineCompileOptions mPCO;
     std::vector<Data>& mCData;
-    std::set<OptixProgramGroup>& mCGroup;
+    std::vector<Data>& mHData;
+    std::set<OptixProgramGroup>& mGroups;
+    std::vector<std::shared_ptr<Light>>& mLights;
     std::unordered_map<std::string, Module> mModules;
+    std::unordered_map<std::string, std::shared_ptr<Asset>> mAssets;
+    std::unordered_map<std::string, std::shared_ptr<Config>> mAssetConfig;
+
+    std::shared_ptr<Asset>
+    instantiateAssetImpl(Name api, std::shared_ptr<Config> cfg) override {
+        BUS_TRACE_BEG() {
+            std::string pluginName = cfg->attribute("Plugin")->asString();
+            auto res = mSys.parse(pluginName, api);
+            Bus::FunctionId fid{ res.first, res.second };
+            if(cfg->hasAttr("AssetName")) {
+                auto assetName = cfg->attribute("AssetName")->asString();
+                auto iter = mAssetConfig.find(assetName);
+                if(iter == mAssetConfig.end())
+                    BUS_TRACE_THROW(std::logic_error("No asset is named \"" +
+                                                     assetName + "\"."));
+                auto&& assetCfg = iter->second;
+                auto key = assetName + "@" + Bus::GUID2Str(fid.guid) + "#" +
+                    fid.name.data();
+                std::shared_ptr<Asset>& asset = mAssets[key];
+                if(!asset) {
+                    asset = mSys.instantiate<Asset>(fid);
+                    asset->init(this, assetCfg);
+                }
+                return asset;
+            } else {
+                auto inst = mSys.instantiate<Asset>(fid);
+                inst->init(this, cfg);
+                return inst;
+            }
+        }
+        BUS_TRACE_END();
+    }
 
 public:
-    PluginHelperImpl(OptixDeviceContext context, const fs::path& scenePath,
+    PluginHelperImpl(OptixDeviceContext context, Bus::ModuleSystem& sys,
+                     std::shared_ptr<Config> assCfg, const fs::path& scenePath,
                      bool debug, const OptixModuleCompileOptions& MCO,
                      const OptixPipelineCompileOptions& PCO,
-                     std::vector<Data>& cdata,
-                     std::set<OptixProgramGroup>& cgroup)
-        : mContext(context), mScenePath(scenePath), mDebug(debug), mMCO(MCO),
-          mPCO(PCO), mCData(cdata), mCGroup(cgroup) {}
+                     std::vector<Data>& cdata, std::vector<Data>& hdata,
+                     std::vector<std::shared_ptr<Light>>& lights,
+                     std::set<OptixProgramGroup>& group)
+        : mContext(context), mSys(sys), mScenePath(scenePath), mDebug(debug),
+          mMCO(MCO), mPCO(PCO), mCData(cdata), mHData(hdata), mLights(lights),
+          mGroups(group) {
+        for(auto&& asset : assCfg->expand()) {
+            mAssetConfig[asset->attribute("Name")->asString()] = asset;
+        }
+    }
     unsigned addCallable(OptixProgramGroup group, const Data& sbtData) {
-        mCGroup.insert(group);
+        mGroups.insert(group);
         unsigned res = static_cast<unsigned>(mCData.size()) +
             static_cast<unsigned>(SBTSlot::userOffset);
         mCData.push_back(sbtData);
         return res;
+    }
+    unsigned addHitGroup(OptixProgramGroup radGroup, const Data& rad,
+                         OptixProgramGroup occGroup, const Data& occ) override {
+        mGroups.insert(radGroup);
+        mGroups.insert(occGroup);
+        unsigned res = static_cast<unsigned>(mHData.size()) / 2;
+        mHData.push_back(rad);
+        mHData.push_back(occ);
+        return res;
+    }
+    void addLight(std::shared_ptr<Light> light) override {
+        mLights.push_back(light);
     }
     OptixDeviceContext getContext() const override {
         return mContext;
@@ -85,13 +139,16 @@ public:
 };
 
 std::unique_ptr<PluginHelperAPI>
-buildPluginHelper(OptixDeviceContext context, const fs::path& scenePath,
+buildPluginHelper(OptixDeviceContext context, Bus::ModuleSystem& sys,
+                  std::shared_ptr<Config> assCfg, const fs::path& scenePath,
                   bool debug, const OptixModuleCompileOptions& MCO,
                   const OptixPipelineCompileOptions& PCO,
-                  std::vector<Data>& cdata,
-                  std::set<OptixProgramGroup>& cgroup) {
-    return std::make_unique<PluginHelperImpl>(context, scenePath, debug, MCO,
-                                              PCO, cdata, cgroup);
+                  std::vector<Data>& cdata, std::vector<Data>& hdata,
+                  std::vector<std::shared_ptr<Light>>& lights,
+                  std::set<OptixProgramGroup>& group) {
+    return std::make_unique<PluginHelperImpl>(context, sys, assCfg, scenePath,
+                                              debug, MCO, PCO, cdata, hdata,
+                                              lights, group);
 }
 
 static void checkNVRTCError(nvrtcResult res) {

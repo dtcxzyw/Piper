@@ -1,3 +1,4 @@
+#include "../../Shared/ConfigAPI.hpp"
 #include "../../Shared/TextureSamplerAPI.hpp"
 #include "DataDesc.hpp"
 #pragma warning(push, 0)
@@ -10,12 +11,12 @@ BUS_MODULE_NAME("Piper.BuiltinTextureSampler.BuiltinSampler");
 class ConstantColor final : public TextureSampler {
 private:
     ProgramGroup mProgramGroup;
+    TextureSamplerData mData;
 
 public:
     explicit ConstantColor(Bus::ModuleInstance& instance)
         : TextureSampler(instance) {}
-    TextureSamplerData init(PluginHelper helper,
-                            std::shared_ptr<Config> cfg) override {
+    void init(PluginHelper helper, std::shared_ptr<Config> cfg) override {
         BUS_TRACE_BEG() {
             Constant data;
             data.color = cfg->attribute("Color")->asVec3();
@@ -32,12 +33,13 @@ public:
                                                     1, &opt, nullptr, nullptr,
                                                     &group));
             mProgramGroup.reset(group);
-            TextureSamplerData res;
-            res.sbtData = packSBTRecord(group, data);
-            res.group = group;
-            return res;
+            mData.sbtData = packSBTRecord(group, data);
+            mData.group = group;
         }
         BUS_TRACE_END();
+    }
+    TextureSamplerData getData() override {
+        return mData;
     }
 };
 

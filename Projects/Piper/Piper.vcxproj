@@ -93,6 +93,7 @@
     <ClCompile Include="..\..\Src\Piper\CameraAdapter.cpp" />
     <ClCompile Include="..\..\Src\Piper\JsonConfig.cpp" />
     <ClCompile Include="..\..\Src\Piper\main.cpp" />
+    <ClCompile Include="..\..\Src\Piper\Node.cpp" />
     <ClCompile Include="..\..\Src\Piper\PluginShared.cpp" />
     <ClCompile Include="..\..\Src\Piper\Renderer.cpp" />
     <ClCompile Include="..\..\Src\ThirdParty\Bus\BusImpl.cpp" />
@@ -114,19 +115,6 @@
     <ClInclude Include="..\..\Src\Shared\SamplerAPI.hpp" />
     <ClInclude Include="..\..\Src\Shared\Shared.hpp" />
     <ClInclude Include="..\..\Src\Shared\TextureSamplerAPI.hpp" />
-  </ItemGroup>
-  <ItemGroup>
-    <None Include="..\..\Src\Piper\Default.cu">
-      <FileType>Document</FileType>
-      <Command Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">nvcc %(FullPath) -o $(TargetDir)Libs\%(Filename).ptx -I "$(CUDA_PATH)\include;$(OPTIX_PATH)include" -cudart=none -ptx -O2 -m64 -arch=sm_50 -use_fast_math -w -rdc=true -lineinfo</Command>
-      <Message Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Build %(Filename) PTX</Message>
-      <BuildInParallel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</BuildInParallel>
-      <Command Condition="'$(Configuration)|$(Platform)'=='Release|x64'">nvcc %(FullPath) -o $(TargetDir)Libs\%(Filename).ptx -I "$(CUDA_PATH)\include;$(OPTIX_PATH)include" -cudart=none -ptx -O2 -m64 -arch=sm_50 -use_fast_math -w -rdc=true -lineinfo</Command>
-      <Message Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Build %(Filename) PTX</Message>
-      <BuildInParallel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</BuildInParallel>
-      <Outputs Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">$(TargetDir)Libs\%(Filename).ptx;%(Outputs)</Outputs>
-      <Outputs Condition="'$(Configuration)|$(Platform)'=='Release|x64'">$(TargetDir)Libs\%(Filename).ptx;%(Outputs)</Outputs>
-    </None>
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

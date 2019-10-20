@@ -1,5 +1,6 @@
 #include "../Shared/ConfigAPI.hpp"
 #pragma warning(push, 0)
+//#define NDEBUG
 #include <nlohmann/json.hpp>
 #pragma warning(pop)
 #include <fstream>

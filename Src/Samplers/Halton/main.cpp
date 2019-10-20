@@ -1,4 +1,5 @@
 #include "../../Shared/SamplerAPI.hpp"
+#include "../../Shared/ConfigAPI.hpp"
 #include <algorithm>
 #include <chrono>
 #include <random>

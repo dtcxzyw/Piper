@@ -1,5 +1,5 @@
 #pragma once
-#include "ConfigAPI.hpp"
+#include "PluginShared.hpp"
 
 struct IntegratorData final {
     Data sbtData;

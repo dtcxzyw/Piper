@@ -1,4 +1,4 @@
-#include "../../Shared/PluginShared.hpp"
+#include "MeshAPI.hpp"
 #include <fstream>
 #pragma warning(push, 0)
 #include <lz4.h>
@@ -6,7 +6,7 @@
 
 // TODO:Stream Reading
 
-BUS_MODULE_NAME("Piper.BuiltinGeometry.TriMesh");
+BUS_MODULE_NAME("Piper.BuiltinGeometry.TriMesh.RawMeshLoader");
 
 template <typename T>
 void read(const std::vector<char>& stream, uint64_t& offset, T* ptr,
@@ -41,52 +41,80 @@ std::vector<char> loadLZ4(const fs::path& path) {
     BUS_TRACE_END();
 }
 
-void load(CUstream stream, const fs::path& path, uint64_t& vertexSize,
-          uint64_t& indexSize, Buffer& vertexBuf, Buffer& indexBuf,
-          Buffer& normalBuf, Buffer& texCoordBuf, Bus::Reporter& reporter) {
-    BUS_TRACE_BEG() {
-        std::vector<char> data = loadLZ4(path);
-        ASSERT(std::string(data.data(), data.data() + 4) == "mesh",
-               "Bad mesh header.");
-        uint64_t offset = 4;  // mesh
-        uint32_t flag = 0;
-        read(data, offset, &vertexSize);
-        read(data, offset, &flag);
-        {
-            size_t siz = vertexSize * sizeof(Vec3);
-            vertexBuf = allocBuffer(siz);
-            checkCudaError(cuMemcpyHtoDAsync(
-                asPtr(vertexBuf), data.data() + offset, siz, stream));
-            offset += siz;
+class RawMesh final : public Mesh {
+private:
+    uint32_t mVertexSize, mIndexSize;
+    Buffer mVertexBuf, mIndexBuf, mNormalBuf, mTexCoordBuf;
+
+public:
+    explicit RawMesh(Bus::ModuleInstance& instance) : Mesh(instance) {}
+    void init(PluginHelper helper, std::shared_ptr<Config> config) override {
+        BUS_TRACE_BEG() {
+            fs::path path = config->attribute("Path")->asString();
+            CUstream stream = 0;
+
+            SRT transform = config->getTransform("Transform");
+            // TODO:pre transform
+
+            std::vector<char> data = loadLZ4(path);
+            ASSERT(std::string(data.data(), data.data() + 4) == "mesh",
+                   "Bad mesh header.");
+            uint64_t offset = 4;  // mesh
+            uint32_t flag = 0;
+            read(data, offset, &mVertexSize);
+            read(data, offset, &flag);
+            {
+                size_t siz = mVertexSize * sizeof(Vec3);
+                mVertexBuf = allocBuffer(siz);
+                checkCudaError(cuMemcpyHtoDAsync(
+                    asPtr(mVertexBuf), data.data() + offset, siz, stream));
+                offset += siz;
+            }
+            // Normal
+            if(flag & 1) {
+                size_t siz = mVertexSize * sizeof(Vec3);
+                mNormalBuf = allocBuffer(siz);
+                checkCudaError(cuMemcpyHtoDAsync(
+                    asPtr(mNormalBuf), data.data() + offset, siz, stream));
+                offset += siz;
+            }
+            // TexCoord
+            if(flag & 2) {
+                size_t siz = mVertexSize * sizeof(Vec2);
+                mTexCoordBuf = allocBuffer(siz);
+                checkCudaError(cuMemcpyHtoDAsync(
+                    asPtr(mTexCoordBuf), data.data() + offset, siz, stream));
+                offset += siz;
+            }
+            read(data, offset, &mIndexSize);
+            {
+                size_t siz = mIndexSize * sizeof(Uint3);
+                mIndexBuf = allocBuffer(siz);
+                checkCudaError(cuMemcpyHtoDAsync(
+                    asPtr(mIndexBuf), data.data() + offset, siz, stream));
+                offset += siz;
+            }
+            reporter().apply(ReportLevel::Info,
+                             "Loaded " + std::to_string(mVertexSize) +
+                                 " vertexes," + std::to_string(mIndexSize) +
+                                 " faces.",
+                             BUS_DEFSRCLOC());
         }
-        // Normal
-        if(flag & 1) {
-            size_t siz = vertexSize * sizeof(Vec3);
-            normalBuf = allocBuffer(siz);
-            checkCudaError(cuMemcpyHtoDAsync(
-                asPtr(normalBuf), data.data() + offset, siz, stream));
-            offset += siz;
-        }
-        // TexCoord
-        if(flag & 2) {
-            size_t siz = vertexSize * sizeof(Vec2);
-            texCoordBuf = allocBuffer(siz);
-            checkCudaError(cuMemcpyHtoDAsync(
-                asPtr(texCoordBuf), data.data() + offset, siz, stream));
-            offset += siz;
-        }
-        read(data, offset, &indexSize);
-        {
-            size_t siz = indexSize * sizeof(Uint3);
-            indexBuf = allocBuffer(siz);
-            checkCudaError(cuMemcpyHtoDAsync(
-                asPtr(indexBuf), data.data() + offset, siz, stream));
-            offset += siz;
-        }
-        reporter.apply(ReportLevel::Info,
-                       "Loaded " + std::to_string(vertexSize) + " vertexes," +
-                           std::to_string(indexSize) + " faces.",
-                       BUS_DEFSRCLOC());
+        BUS_TRACE_END();
     }
-    BUS_TRACE_END();
+    MeshData getData() override {
+        MeshData data;
+        data.index = mIndexBuf.get();
+        data.indexSize = mIndexSize;
+        data.normal = mNormalBuf.get();
+        data.texCoord = mTexCoordBuf.get();
+        data.vertex = mVertexBuf.get();
+        data.vertexSize = mVertexSize;
+        return data;
+    }
+};
+
+std::shared_ptr<Bus::ModuleFunctionBase>
+getRawMeshLoader(Bus::ModuleInstance& instance) {
+    return std::make_shared<RawMesh>(instance);
 }

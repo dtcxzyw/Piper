@@ -14,11 +14,13 @@
 #pragma warning(pop)
 
 std::unique_ptr<PluginHelperAPI>
-buildPluginHelper(OptixDeviceContext context, const fs::path& scenePath,
+buildPluginHelper(OptixDeviceContext context, Bus::ModuleSystem& sys,
+                  std::shared_ptr<Config> assCfg, const fs::path& scenePath,
                   bool debug, const OptixModuleCompileOptions& MCO,
                   const OptixPipelineCompileOptions& PCO,
-                  std::vector<Data>& cdata,
-                  std::set<OptixProgramGroup>& cgroup);
+                  std::vector<Data>& cdata, std::vector<Data>& hdata,
+                  std::vector<std::shared_ptr<Light>>& lights,
+                  std::set<OptixProgramGroup>& group);
 
 BUS_MODULE_NAME("Piper.Builtin.Renderer");
 
@@ -152,57 +154,6 @@ std::shared_ptr<Driver> loadDriver(std::shared_ptr<Config> config,
     return driver;
 }
 
-using GeometryLib = std::map<std::string, std::shared_ptr<Geometry>>;
-
-GeometryLib loadGeometries(std::shared_ptr<Config> config, PluginHelper helper,
-                           Bus::ModuleSystem& sys,
-                           std::vector<GeometryData>& data) {
-    sys.getReporter().apply(Bus::ReportLevel::Info, "Loading geometries",
-                            BUS_DEFSRCLOC());
-    BUS_TRACE_BEG() {
-        GeometryLib res;
-        for(auto cfg : config->expand()) {
-            std::string name = cfg->attribute("Name")->asString();
-            if(res.count(name)) {
-                BUS_TRACE_THROW(std::logic_error("Geometry \"" + name +
-                                                 "\" has been defined."));
-            } else {
-                auto geo = sys.instantiateByName<Geometry>(
-                    cfg->attribute("Plugin")->asString());
-                data.emplace_back(geo->init(helper, cfg));
-                res.emplace(name, geo);
-            }
-        }
-        return res;
-    }
-    BUS_TRACE_END();
-}
-
-using LightLib = std::map<std::string, std::shared_ptr<Light>>;
-
-LightLib loadLights(std::shared_ptr<Config> config, PluginHelper helper,
-                    Bus::ModuleSystem& sys, std::vector<LightData>& data) {
-    sys.getReporter().apply(Bus::ReportLevel::Info, "Loading lights",
-                            BUS_DEFSRCLOC());
-    BUS_TRACE_BEG() {
-        LightLib res;
-        for(auto cfg : config->expand()) {
-            std::string name = cfg->attribute("Name")->asString();
-            if(res.count(name)) {
-                BUS_TRACE_THROW(std::logic_error("Light \"" + name +
-                                                 "\" has been defined."));
-            } else {
-                auto geo = sys.instantiateByName<Light>(
-                    cfg->attribute("Plugin")->asString());
-                data.emplace_back(geo->init(helper, cfg));
-                res.emplace(name, geo);
-            }
-        }
-        return res;
-    }
-    BUS_TRACE_END();
-}
-
 std::shared_ptr<LightSampler> loadLightSampler(std::shared_ptr<Config> config,
                                                PluginHelper helper,
                                                Bus::ModuleSystem& sys,
@@ -251,17 +202,19 @@ void renderImpl(std::shared_ptr<Config> config, const fs::path& scenePath,
         if(debug)
             PCO.exceptionFlags |= OPTIX_EXCEPTION_FLAG_DEBUG;
         PCO.pipelineLaunchParamsVariableName = "launchParam";
-        PCO.traversableGraphFlags =
-            OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_SINGLE_GAS;
+        // TODO:simple graph optimization
+        PCO.traversableGraphFlags = OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_ANY;
         // TODO:motion blur
         PCO.usesMotionBlur = false;
         // TODO:configurable attribute
         PCO.numAttributeValues = 2;
         PCO.numPayloadValues = 2;
         std::set<OptixProgramGroup> groups;
-        std::vector<Data> callableData;
+        std::vector<Data> callableData, hitGroupData;
+        std::vector<std::shared_ptr<Light>> lights;
         std::shared_ptr<PluginHelperAPI> helper = buildPluginHelper(
-            context.get(), scenePath, debug, MCO, PCO, callableData, groups);
+            context.get(), sys, config->attribute("Assets"), scenePath, debug,
+            MCO, PCO, callableData, hitGroupData, lights, groups);
 
         auto& reporter = sys.getReporter();
         unsigned msd = 0;
@@ -283,20 +236,19 @@ void renderImpl(std::shared_ptr<Config> config, const fs::path& scenePath,
             loadDriver(config->attribute("Driver"), helper.get(), sys, ddata);
         groups.insert(ddata.group.begin(), ddata.group.end());
 
-        std::vector<GeometryData> gdata;
-        GeometryLib geos = loadGeometries(config->attribute("GeometryLib"),
-                                          helper.get(), sys, gdata);
-        for(auto&& data : gdata) {
-            groups.insert(data.group.begin(), data.group.end());
-            msd = std::max(msd, data.maxSampleDim);
-        }
+        reporter.apply(ReportLevel::Info, "Loading scene graph",
+                       BUS_DEFSRCLOC());
+        Bus::FunctionId nodeClass{
+            Bus::str2GUID("{9EAF8BBA-3C9B-46B9-971F-1C4F18670F74}"), "Node"
+        };
+        std::shared_ptr<Geometry> root = sys.instantiate<Geometry>(nodeClass);
+        root->init(helper.get(), config->attribute("Scene"));
+        msd = std::max(msd, root->getData().maxSampleDim);
 
-        std::vector<LightData> ldata;
-        LightLib lights =
-            loadLights(config->attribute("LightLib"), helper.get(), sys, ldata);
-        for(auto&& data : ldata) {
-            groups.insert(data.group);
+        for(auto&& light : lights) {
+            auto data = light->getData();
             msd = std::max(msd, data.maxSampleDim);
+            groups.insert(data.group);
         }
 
         // TODO:LightSamplerHelper
@@ -335,13 +287,10 @@ void renderImpl(std::shared_ptr<Config> config, const fs::path& scenePath,
             static_cast<unsigned>(SBTSlot::userOffset) +
             static_cast<unsigned>(callableData.size());
         launchParam.lightSbtOffset = launchParam.samplerSbtOffset + msd;
-        launchParam.root = gdata.front().handle;
+        launchParam.root = root->getData().handle;
 
         OptixShaderBindingTable sbt = {};
-        std::vector<Data> hitGroup;
-        hitGroup.emplace_back(gdata.front().radSBTData);
-        hitGroup.emplace_back(gdata.front().occSBTData);
-        Buffer hgBuf = uploadSBTRecords(0, hitGroup, sbt.hitgroupRecordBase,
+        Buffer hgBuf = uploadSBTRecords(0, hitGroupData, sbt.hitgroupRecordBase,
                                         sbt.hitgroupRecordStrideInBytes,
                                         sbt.hitgroupRecordCount);
 
@@ -395,8 +344,8 @@ void renderImpl(std::shared_ptr<Config> config, const fs::path& scenePath,
                          callableData.end());
         callables.insert(callables.end(), sdata.sbtData.begin(),
                          sdata.sbtData.end());
-        for(auto&& data : ldata)
-            callables.push_back(data.sbtData);
+        for(auto&& light : lights)
+            callables.push_back(light->getData().sbtData);
         auto dHelper = std::make_unique<DriverHelperImpl>(
             camera, sbt, callables, pipe, launchParam);
         driver->doRender(dHelper.get());

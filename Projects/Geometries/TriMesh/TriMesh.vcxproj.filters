@@ -11,5 +11,6 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\..\..\Src\Geometries\TriMesh\DataDesc.hpp" />
+    <ClInclude Include="..\..\..\Src\Geometries\TriMesh\MeshAPI.hpp" />
   </ItemGroup>
 </Project>

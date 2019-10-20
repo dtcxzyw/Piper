@@ -1,5 +1,5 @@
 #pragma once
-#include "ConfigAPI.hpp"
+#include "PluginShared.hpp"
 
 struct MaterialData final {
     Data radData;
@@ -7,16 +7,14 @@ struct MaterialData final {
     OptixProgramGroup group;
 };
 
-class Material : public Bus::ModuleFunctionBase {
+class Material : public Asset {
 protected:
-    explicit Material(Bus::ModuleInstance& instance)
-        : ModuleFunctionBase(instance) {}
+    explicit Material(Bus::ModuleInstance& instance) : Asset(instance) {}
 
 public:
     static Name getInterface() {
         return "Piper.Material:1";
     }
 
-    virtual MaterialData init(PluginHelper helper,
-                              std::shared_ptr<Config> config) = 0;
+    virtual MaterialData getData() = 0;
 };

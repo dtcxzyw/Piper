@@ -1,5 +1,5 @@
 #pragma once
-#include "ConfigAPI.hpp"
+#include "PluginShared.hpp"
 #include <functional>
 
 class DriverHelperAPI : private Unmoveable {
