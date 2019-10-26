@@ -15,32 +15,33 @@ getMesh2Raw(Bus::ModuleInstance& instance);
 
 BUS_MODULE_NAME("Piper.BuiltinGeometry.TriMesh");
 
-// TODO:Shared Accel
+struct TriMeshAccelData final {
+    OptixTraversableHandle handle;
+    OptixProgramGroup radGroup, occGroup;
+    DataDesc accelData;
+};
 
-class TriMesh final : public Geometry {
+class TriMeshAccel final : public Asset {
 private:
-    ProgramGroup mRadGroup, mOccGroup;
-    Buffer mMatIndex, mAccel;
-    std::shared_ptr<Material> mMat;
+    Buffer mAccel;
     std::shared_ptr<Mesh> mMesh;
-    GeometryData mData;
+    ProgramGroup mRadGroup, mOccGroup;
+    TriMeshAccelData mData;
 
 public:
-    explicit TriMesh(Bus::ModuleInstance& instance) : Geometry(instance) {}
+    static Name getInterface() {
+        return "Piper.TriMeshAccel:1";
+    }
+    explicit TriMeshAccel(Bus::ModuleInstance& instance) : Asset(instance) {}
     void init(PluginHelper helper, std::shared_ptr<Config> config) override {
         BUS_TRACE_BEG() {
             mMesh = helper->instantiateAsset<Mesh>(config->attribute("Mesh"));
             MeshData meshData = mMesh->getData();
-            DataDesc data;
+            DataDesc& data = mData.accelData;
             data.vertex = static_cast<Vec3*>(meshData.vertex);
             data.index = static_cast<Uint3*>(meshData.index);
             data.normal = static_cast<Vec3*>(meshData.normal);
             data.texCoord = static_cast<Vec2*>(meshData.texCoord);
-            mMat = helper->instantiateAsset<Material>(
-                config->attribute("Material"));
-            MaterialData matData = mMat->getData();
-            data.material = helper->addCallable(matData.group, matData.radData);
-            mData.maxSampleDim = matData.maxSampleDim;
 
             OptixModule mod = helper->loadModuleFromFile(
                 modulePath().parent_path() / "Triangle.ptx");
@@ -59,10 +60,8 @@ public:
                 helper->getContext(), desc, 2, &gopt, nullptr, nullptr, group));
             mRadGroup.reset(group[0]);
             mOccGroup.reset(group[1]);
-
-            unsigned sbtID = helper->addHitGroup(
-                mRadGroup.get(), packSBTRecord(mRadGroup.get(), data),
-                mOccGroup.get(), packSBTRecord(mOccGroup.get(), data));
+            mData.radGroup = mRadGroup.get();
+            mData.occGroup = mOccGroup.get();
 
             CUstream stream = 0;
 
@@ -87,11 +86,8 @@ public:
             arr.preTransform = 0;
             arr.primitiveIndexOffset = 0;
 
-            mMatIndex = allocBuffer(meshData.indexSize * sizeof(unsigned));
-            checkCudaError(cuMemsetD32Async(asPtr(mMatIndex), sbtID,
-                                            meshData.indexSize, stream));
-            arr.sbtIndexOffsetBuffer = asPtr(mMatIndex);
-            arr.sbtIndexOffsetSizeInBytes = 4;
+            arr.sbtIndexOffsetBuffer = 0;
+            arr.sbtIndexOffsetSizeInBytes = 0;
             arr.sbtIndexOffsetStrideInBytes = 0;
 
             CUdeviceptr ptr = reinterpret_cast<CUdeviceptr>(meshData.vertex);
@@ -114,6 +110,80 @@ public:
                 &mData.handle, nullptr, 0));
             checkCudaError(cuStreamSynchronize(stream));
             // TODO:Accel Compaction
+        }
+        BUS_TRACE_END();
+    }
+    TriMeshAccelData getData() const {
+        return mData;
+    }
+};
+
+class TriMesh final : public Geometry {
+private:
+    std::shared_ptr<TriMeshAccel> mAccel;
+    std::shared_ptr<Material> mMat;
+    GeometryData mData;
+    Buffer mAccelBuffer, mInstance;
+
+public:
+    explicit TriMesh(Bus::ModuleInstance& instance) : Geometry(instance) {}
+    void init(PluginHelper helper, std::shared_ptr<Config> config) override {
+        BUS_TRACE_BEG() {
+            mAccel = helper->instantiateAsset<TriMeshAccel>(
+                config->attribute("Accel"));
+            mMat = helper->instantiateAsset<Material>(
+                config->attribute("Material"));
+            TriMeshAccelData accelData = mAccel->getData();
+            DataDesc data = accelData.accelData;
+            mData.handle = accelData.handle;
+            MaterialData matData = mMat->getData();
+            data.material = helper->addCallable(matData.group, matData.radData);
+            mData.maxSampleDim = matData.maxSampleDim;
+
+            unsigned sbtID = helper->addHitGroup(
+                accelData.radGroup, packSBTRecord(accelData.radGroup, data),
+                accelData.occGroup, packSBTRecord(accelData.occGroup, data));
+
+            // TODO:Transform
+            if(sbtID != 0) {
+                OptixInstance inst = {};
+                // TODO:mask
+                inst.visibilityMask = geometryMask;
+                inst.instanceId = 0;
+                inst.flags = OPTIX_INSTANCE_FLAG_DISABLE_TRANSFORM;
+                inst.sbtOffset = sbtID * 2;
+                inst.traversableHandle = accelData.handle;
+                // TODO:Disable transform???
+                *reinterpret_cast<glm::mat3x4*>(inst.transform) =
+                    glm::identity<Mat4>();
+                mInstance =
+                    uploadData(0, &inst, 1, OPTIX_INSTANCE_BYTE_ALIGNMENT);
+
+                OptixBuildInput input = {};
+                input.type = OPTIX_BUILD_INPUT_TYPE_INSTANCES;
+                auto& instInput = input.instanceArray;
+                instInput.aabbs = instInput.numAabbs = 0;
+                instInput.numInstances = 1;
+                instInput.instances = asPtr(mInstance);
+
+                OptixAccelBuildOptions opt = {};
+                opt.operation = OPTIX_BUILD_OPERATION_BUILD;
+
+                OptixAccelBufferSizes size;
+
+                checkOptixError(optixAccelComputeMemoryUsage(
+                    helper->getContext(), &opt, &input, 1, &size));
+
+                Buffer tmp = allocBuffer(size.tempSizeInBytes,
+                                         OPTIX_ACCEL_BUFFER_BYTE_ALIGNMENT);
+                mAccelBuffer = allocBuffer(size.outputSizeInBytes,
+                                           OPTIX_ACCEL_BUFFER_BYTE_ALIGNMENT);
+                checkOptixError(optixAccelBuild(
+                    helper->getContext(), 0, &opt, &input, 1, asPtr(tmp),
+                    size.tempSizeInBytes, asPtr(mAccelBuffer),
+                    size.outputSizeInBytes, &mData.handle, nullptr, 0));
+                checkCudaError(cuStreamSynchronize(0));
+            }
         }
         BUS_TRACE_END();
     }
@@ -146,11 +216,15 @@ public:
             return { "TriMesh" };
         if(api == Command::getInterface())
             return { "MeshConverter" };
+        if(api == TriMeshAccel::getInterface())
+            return { "TriMeshAccel" };
         return {};
     }
     std::shared_ptr<Bus::ModuleFunctionBase> instantiate(Name name) override {
         if(name == "RawMesh")
             return getRawMeshLoader(*this);
+        if(name == "TriMeshAccel")
+            return std::make_shared<TriMeshAccel>(*this);
         if(name == "TriMesh")
             return std::make_shared<TriMesh>(*this);
         if(name == "MeshConverter")

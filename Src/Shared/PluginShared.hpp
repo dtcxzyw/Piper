@@ -58,3 +58,16 @@ protected:
 public:
     virtual void init(PluginHelper helper, std::shared_ptr<Config> config) = 0;
 };
+
+struct SRT final {
+    Vec3 scale;
+    Quat rotate;
+    Vec3 trans;
+    Mat4 getPointTrans() const {
+        Mat4 t = glm::identity<Mat4>();
+        t[0][0] = scale.x, t[1][1] = scale.y, t[2][2] = scale.z;
+        t *= glm::mat4_cast(rotate);
+        t[0][3] = trans.x, t[1][3] = trans.y, t[2][3] = trans.z;
+        return t;
+    }
+};

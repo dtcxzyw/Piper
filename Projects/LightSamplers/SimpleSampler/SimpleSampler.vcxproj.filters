@@ -8,6 +8,6 @@
     <ClInclude Include="..\..\..\Src\LightSamplers\SimpleSampler\DataDesc.hpp" />
   </ItemGroup>
   <ItemGroup>
-    <None Include="..\..\..\Src\LightSamplers\SimpleSampler\Sampler.cu" />
+    <CustomBuild Include="..\..\..\Src\LightSamplers\SimpleSampler\Sampler.cu" />
   </ItemGroup>
 </Project>

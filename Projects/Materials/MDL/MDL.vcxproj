@@ -12,8 +12,8 @@
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>16.0</VCProjectVersion>
-    <ProjectGuid>{2162987C-1116-4A98-8E13-C2B568CA72BD}</ProjectGuid>
-    <RootNamespace>SimpleSampler</RootNamespace>
+    <ProjectGuid>{219C1DAD-DF81-42C0-87C9-D8052EC51B3C}</ProjectGuid>
+    <RootNamespace>MDL</RootNamespace>
     <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
@@ -44,11 +44,11 @@
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <OutDir>$(SolutionDir)Bin\Plugins\$(ProjectName)\</OutDir>
-    <IncludePath>$(CUDA_PATH)\include;$(OPTIX_PATH)\include;$(IncludePath)</IncludePath>
+    <IncludePath>$(OPTIX_PATH)\include;$(CUDA_PATH)\include;$(MDL_SDK_PATH)\include;$(IncludePath)</IncludePath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <OutDir>$(SolutionDir)Bin\Plugins\$(ProjectName)\</OutDir>
-    <IncludePath>$(CUDA_PATH)\include;$(OPTIX_PATH)\include;$(IncludePath)</IncludePath>
+    <IncludePath>$(OPTIX_PATH)\include;$(CUDA_PATH)\include;$(MDL_SDK_PATH)\include;$(IncludePath)</IncludePath>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <ClCompile>
@@ -81,24 +81,12 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="..\..\..\Src\LightSamplers\SimpleSampler\main.cpp" />
+    <ClCompile Include="..\..\..\Src\Materials\MDL\main.cpp" />
+    <ClCompile Include="..\..\..\Src\Materials\MDL\MDLBase.cpp" />
     <ClCompile Include="..\..\..\Src\ThirdParty\Bus\BusImpl.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="..\..\..\Src\LightSamplers\SimpleSampler\DataDesc.hpp" />
-  </ItemGroup>
-  <ItemGroup>
-    <CustomBuild Include="..\..\..\Src\LightSamplers\SimpleSampler\Sampler.cu">
-      <FileType>Document</FileType>
-      <Command Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">nvcc %(FullPath) -o $(TargetDir)%(Filename).ptx  -I "$(CUDA_PATH)\include";"$(OPTIX_PATH)\include" -ptx -O2 -m64 -arch=sm_50 -use_fast_math -w -rdc=true </Command>
-      <Message Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">build %(Filename) PTX</Message>
-      <Outputs Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">$(TargetDir)%(Filename).ptx</Outputs>
-      <BuildInParallel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</BuildInParallel>
-      <Command Condition="'$(Configuration)|$(Platform)'=='Release|x64'">nvcc %(FullPath) -o $(TargetDir)%(Filename).ptx  -I "$(CUDA_PATH)\include";"$(OPTIX_PATH)\include" -ptx -O2 -m64 -arch=sm_50 -use_fast_math -w -rdc=true </Command>
-      <Message Condition="'$(Configuration)|$(Platform)'=='Release|x64'">build %(Filename) PTX</Message>
-      <Outputs Condition="'$(Configuration)|$(Platform)'=='Release|x64'">$(TargetDir)%(Filename).ptx</Outputs>
-      <BuildInParallel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</BuildInParallel>
-    </CustomBuild>
+    <ClInclude Include="..\..\..\Src\Materials\MDL\MDLShared.hpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

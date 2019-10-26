@@ -7,6 +7,7 @@
 #include "../Shared/LightSamplerAPI.hpp"
 #include "../Shared/SamplerAPI.hpp"
 #include "CameraAdapter.hpp"
+#include <chrono>
 #pragma warning(push, 0)
 #define NOMINMAX
 #include <optix_function_table_definition.h>
@@ -182,6 +183,8 @@ std::shared_ptr<Sampler> loadSampler(std::shared_ptr<Config> config,
 void renderImpl(std::shared_ptr<Config> config, const fs::path& scenePath,
                 Bus::ModuleSystem& sys) {
     BUS_TRACE_BEG() {
+        using Clock = std::chrono::high_resolution_clock;
+        auto initTs = Clock::now();
         CUDAContext ctx = createCUDAContext(sys.getReporter());
         auto global = config->attribute("Core");
         Context context = createContext(ctx.get(), sys.getReporter(), global);
@@ -236,6 +239,7 @@ void renderImpl(std::shared_ptr<Config> config, const fs::path& scenePath,
             loadDriver(config->attribute("Driver"), helper.get(), sys, ddata);
         groups.insert(ddata.group.begin(), ddata.group.end());
 
+        // TODO:scene analysis
         reporter.apply(ReportLevel::Info, "Loading scene graph",
                        BUS_DEFSRCLOC());
         Bus::FunctionId nodeClass{
@@ -295,8 +299,7 @@ void renderImpl(std::shared_ptr<Config> config, const fs::path& scenePath,
                                         sbt.hitgroupRecordCount);
 
         checkCudaError(cuStreamSynchronize(0));
-        reporter.apply(ReportLevel::Info, "Everything is ready.",
-                       BUS_DEFSRCLOC());
+
         struct DriverHelperImpl final : DriverHelperAPI {
         private:
             CameraAdapter& mCamera;
@@ -348,8 +351,44 @@ void renderImpl(std::shared_ptr<Config> config, const fs::path& scenePath,
             callables.push_back(light->getData().sbtData);
         auto dHelper = std::make_unique<DriverHelperImpl>(
             camera, sbt, callables, pipe, launchParam);
+        reporter.apply(ReportLevel::Info, "Everything is ready.",
+                       BUS_DEFSRCLOC());
+        auto renderTs = Clock::now();
         driver->doRender(dHelper.get());
         checkCudaError(cuCtxSynchronize());
+        auto endTs = Clock::now();
+        {
+            auto format = [](uint64_t t) {
+                uint64_t msp = t % 1000;
+                t /= 1000;
+                uint64_t sp = t % 60;
+                t /= 60;
+                uint64_t mp = t % 60;
+                t /= 60;
+                std::string res;
+                bool flag = false;
+                if(t)
+                    res += std::to_string(t) + " h ", flag = true;
+                if(mp || flag)
+                    res += std::to_string(mp) + " min ", flag = true;
+                if(sp || flag)
+                    res += std::to_string(sp) + " s ";
+                res += std::to_string(msp) + " ms";
+                return res;
+            };
+            auto initTime =
+                std::chrono::duration_cast<std::chrono::milliseconds>(renderTs -
+                                                                      initTs)
+                    .count();
+            auto renderTime =
+                std::chrono::duration_cast<std::chrono::milliseconds>(endTs -
+                                                                      renderTs)
+                    .count();
+            reporter.apply(ReportLevel::Info,
+                           "init time:" + format(initTime) +
+                               ",render time:" + format(renderTime),
+                           BUS_DEFSRCLOC());
+        }
     }
     BUS_TRACE_END();
 }

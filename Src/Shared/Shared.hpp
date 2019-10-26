@@ -41,17 +41,6 @@ enum class SBTSlot : unsigned {
     userOffset
 };
 
-struct SRT final {
-    Vec3 scale;
-    Quat rotate;
-    Vec3 trans;
-    Mat4 getPointTrans() const {
-        Mat4 t = glm::translate(glm::identity<Mat4>(), trans);
-        Mat4 r = glm::mat4_cast(rotate);
-        return glm::scale(t * r, scale);
-    }
-};
-
 struct LaunchParam final {
     unsigned samplerSbtOffset, lightSbtOffset;
     OptixTraversableHandle root;

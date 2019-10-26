@@ -101,6 +101,7 @@ public:
                          OptixProgramGroup occGroup, const Data& occ) override {
         mGroups.insert(radGroup);
         mGroups.insert(occGroup);
+        // TODO:merge same hit group
         unsigned res = static_cast<unsigned>(mHData.size()) / 2;
         mHData.push_back(rad);
         mHData.push_back(occ);
