@@ -12,6 +12,5 @@
     <ClInclude Include="..\..\..\Src\Materials\PBRTv3\BxDF.hpp" />
     <ClInclude Include="..\..\..\Src\Materials\PBRTv3\Microfact.hpp" />
     <ClInclude Include="..\..\..\Src\Materials\PBRTv3\DataDesc.hpp" />
-    <ClInclude Include="..\..\..\Src\Materials\PBRTv3\ShadingSpace.hpp" />
   </ItemGroup>
 </Project>

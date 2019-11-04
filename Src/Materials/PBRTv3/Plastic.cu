@@ -1,7 +1,6 @@
 #include "../../Shared/KernelShared.hpp"
 #include "BxDF.hpp"
 #include "DataDesc.hpp"
-#include "ShadingSpace.hpp"
 
 DEVICE void __continuation_callable__sample(Payload* payload, Vec3 dir,
                                             Vec3 hit, Vec3 ng, Vec3 ns,

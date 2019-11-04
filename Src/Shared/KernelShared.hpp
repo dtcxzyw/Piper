@@ -172,3 +172,16 @@ INLINEDEVICE LightSample sampleOneLight(const Vec3& pos, float rayTime,
     return optixContinuationCall<LightSample, const Vec3&, float, uint32_t&>(
         static_cast<unsigned>(SBTSlot::sampleOneLight), pos, rayTime, seed);
 }
+
+// TODO:tangent from mesh
+INLINEDEVICE void calcShadingSpace(const Vec3& dir, const Vec3& ng,
+                                   const Vec3& ns, bool front, Vec3& wo,
+                                   Vec3& frontOffset, Mat3& w2s) {
+    Vec3 bx = { 1.0f, 0.0f, 0.0f }, by = { 0.0f, 1.0f, 0.0f };
+    Vec3 t = glm::normalize(fabs(ns.x) < fabs(ns.y) ? glm::cross(ns, bx) :
+                                                      glm::cross(ns, by));
+    Vec3 bt = glm::cross(t, ns);
+    w2s = Mat3{ t, bt, ns };
+    wo = w2s * glm::normalize(-dir);
+    frontOffset = (front ? ng : -ng) * (1e-3f / glm::length(ng));
+}

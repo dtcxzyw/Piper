@@ -7,5 +7,9 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\..\..\Src\Materials\MDL\MDLShared.hpp" />
+    <ClInclude Include="..\..\..\Src\Materials\MDL\DataDesc.hpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <CustomBuild Include="..\..\..\Src\Materials\MDL\Kernel.cu" />
   </ItemGroup>
 </Project>

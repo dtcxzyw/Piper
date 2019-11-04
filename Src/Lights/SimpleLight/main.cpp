@@ -22,7 +22,7 @@ public:
             data.lum = cfg->attribute("Lum")->asVec3();
             data.direction =
                 glm::normalize(cfg->attribute("Direction")->asVec3());
-            data.distance = cfg->attribute("Distance")->asFloat() - (1e-8f);
+            data.distance = cfg->attribute("Distance")->asFloat();
             OptixModule mod = helper->loadModuleFromFile(
                 modulePath().parent_path() / "DirLight.ptx");
             OptixProgramGroupDesc desc = {};

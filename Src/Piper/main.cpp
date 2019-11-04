@@ -161,7 +161,7 @@ static void loadPlugins(Bus::ModuleSystem& sys) {
     std::stringstream ss;
     ss << "Loaded Module:" << std::endl;
     for(auto mod : sys.listModules()) {
-        ss << mod.name << " " << mod.version << " " << Bus::GUID2Str(mod.guid)
+        ss << Bus::GUID2Str(mod.guid) << " " << mod.name << " " << mod.version
            << std::endl;
     }
     sys.getReporter().apply(ReportLevel::Info, ss.str(), BUS_DEFSRCLOC());
@@ -169,8 +169,9 @@ static void loadPlugins(Bus::ModuleSystem& sys) {
 
 int main(int argc, char** argv) {
     auto reporter = std::make_shared<Bus::Reporter>();
-    reporter->addAction(ReportLevel::Debug,
-                        colorOutput(std::cerr, rang::fg::yellow, "Debug"));
+    reporter->addAction(
+        ReportLevel::Debug,
+        colorOutput(std::cerr, rang::fg::yellow, "Debug", true));
     reporter->addAction(ReportLevel::Error,
                         colorOutput(std::cerr, rang::fg::red, "Error", true));
     reporter->addAction(ReportLevel::Info,
@@ -178,7 +179,12 @@ int main(int argc, char** argv) {
     reporter->addAction(ReportLevel::Warning,
                         colorOutput(std::cerr, rang::fg::yellow, "Warning"));
     try {
-        Bus::ModuleSystem sys(reporter);
+        Bus::ModuleSystem sys(reporter, [] {
+            try {
+                std::rethrow_exception(std::current_exception());
+            }
+            PROCEXC();
+        });
         try {
             auto shared = fs::path(argv[0]).parent_path() / "SharedDll";
             Bus::addModuleSearchPath(shared, *reporter);

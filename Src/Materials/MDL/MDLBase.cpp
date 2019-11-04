@@ -3,24 +3,6 @@
 
 BUS_MODULE_NAME("Piper.BuiltinMaterial.MDL.Base");
 
-void configure(MDL::INeuray* neuray,
-               const std::vector<std::string>& searchPath) {
-    BUS_TRACE_BEG() {
-        Handle<MDL::IMdl_compiler> compiler(
-            neuray->get_api_component<MDL::IMdl_compiler>());
-        // Set the module and texture search path.
-        for(auto&& path : searchPath) {
-            checkMDLError(compiler->add_module_path(path.c_str()) == 0);
-        }
-        /*
-        // Load the FreeImage plugin.
-        checkMDLError(compiler->load_plugin_library(
-                          "nv_freeimage" MI_BASE_DLL_FILE_EXT) == 0);
-                          */
-    }
-    BUS_TRACE_END();
-}
-
 using Bus::ReportLevel;
 // Returns a string-representation of the given message severity
 static ReportLevel severity2Str(mi::base::Message_severity severity) {
@@ -61,20 +43,14 @@ static const char* kind2Str(MDL::IMessage::Kind kind) {
     return "";
 }
 // Prints the messages of the given context.
-// Returns true, if the context does not contain any error messages, false
-// otherwise.
-bool printMessages(Bus::Reporter& reporter,
+void printMessages(Bus::Reporter& reporter,
                    MDL::IMdl_execution_context* context) {
-    BUS_TRACE_BEG() {
-        for(mi::Size i = 0; i < context->get_messages_count(); ++i) {
-            Handle<const MDL::IMessage> message(context->get_message(i));
-            reporter.apply(severity2Str(message->get_severity()),
-                           message->get_string(),
-                           BUS_SRCLOC(kind2Str(message->get_kind())));
-        }
-        return context->get_error_messages_count() == 0;
+    for(mi::Size i = 0; i < context->get_messages_count(); ++i) {
+        Handle<const MDL::IMessage> message(context->get_message(i));
+        reporter.apply(severity2Str(message->get_severity()),
+                       message->get_string(),
+                       BUS_SRCLOC(kind2Str(message->get_kind())));
     }
-    BUS_TRACE_END();
 }
 
 static void printWin32Errror(const std::string& pre, Bus::Reporter& reporter,

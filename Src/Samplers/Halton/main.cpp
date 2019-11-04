@@ -1,5 +1,5 @@
-#include "../../Shared/SamplerAPI.hpp"
 #include "../../Shared/ConfigAPI.hpp"
+#include "../../Shared/SamplerAPI.hpp"
 #include <algorithm>
 #include <chrono>
 #include <random>
@@ -211,6 +211,7 @@ std::string generateSoruce(unsigned maxDim, std::shared_ptr<Config> config,
     BUS_TRACE_END();
 }
 
+// TODO:correct sampling(max->sum)
 class Halton final : public Sampler {
 private:
     std::vector<ProgramGroup> mPrograms;
@@ -221,8 +222,8 @@ public:
                      unsigned maxDim) override {
         BUS_TRACE_BEG() {
             std::string src = generateSoruce(maxDim, config, reporter());
-            reporter().apply(ReportLevel::Debug, "Source:\n" + src,
-                             BUS_DEFSRCLOC());
+            // reporter().apply(ReportLevel::Debug, "Source:\n" + src,
+            // BUS_DEFSRCLOC());
             OptixModule mod = helper->loadModuleFromSrc(src);
             std::vector<std::string> funcNames;
             std::vector<OptixProgramGroupDesc> descs;
