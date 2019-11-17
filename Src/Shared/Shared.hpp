@@ -35,13 +35,12 @@ enum class BxDFType {
 };
 
 enum class SBTSlot : unsigned {
-    generateRay,
-    samplePixel,
     sampleOneLight,
+    initSampler,
     userOffset
 };
 
 struct LaunchParam final {
-    unsigned samplerSbtOffset, lightSbtOffset;
+    unsigned sampleOffset, lightSbtOffset;
     OptixTraversableHandle root;
 };

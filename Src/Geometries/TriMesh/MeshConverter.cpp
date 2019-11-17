@@ -10,7 +10,6 @@
 #pragma warning(pop)
 #include "../../Shared/CommandAPI.hpp"
 
-namespace fs = std::experimental::filesystem;
 BUS_MODULE_NAME("Piper.BuiltinGeometry.TriMesh.MeshConverter");
 
 template <typename T>

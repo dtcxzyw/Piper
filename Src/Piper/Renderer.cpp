@@ -6,7 +6,6 @@
 #include "../Shared/LightAPI.hpp"
 #include "../Shared/LightSamplerAPI.hpp"
 #include "../Shared/SamplerAPI.hpp"
-#include "CameraAdapter.hpp"
 #include <chrono>
 #pragma warning(push, 0)
 #define NOMINMAX
@@ -222,18 +221,6 @@ void renderImpl(std::shared_ptr<Config> config, const fs::path& scenePath,
         auto& reporter = sys.getReporter();
         unsigned msd = 0;
 
-        CameraData cdata;
-        CameraAdapter camera(config->attribute("Camera"), helper.get(), sys,
-                             cdata);
-        groups.insert(cdata.group);
-        msd = std::max(msd, cdata.maxSampleDim);
-
-        IntegratorData idata;
-        std::shared_ptr<Integrator> integrator = loadIntegrator(
-            config->attribute("Integrator"), helper.get(), sys, idata);
-        groups.insert(idata.group);
-        msd = std::max(msd, idata.maxSampleDim);
-
         DriverData ddata;
         std::shared_ptr<Driver> driver =
             loadDriver(config->attribute("Driver"), helper.get(), sys, ddata);
@@ -287,10 +274,9 @@ void renderImpl(std::shared_ptr<Config> config, const fs::path& scenePath,
         // TODO:optixPipelineSetStackSize
 
         LaunchParam launchParam;
-        launchParam.samplerSbtOffset =
-            static_cast<unsigned>(SBTSlot::userOffset) +
+        launchParam.sampleOffset = static_cast<unsigned>(SBTSlot::userOffset) +
             static_cast<unsigned>(callableData.size());
-        launchParam.lightSbtOffset = launchParam.samplerSbtOffset + msd;
+        launchParam.lightSbtOffset = launchParam.sampleOffset + msd;
         launchParam.root = root->getData().handle;
 
         OptixShaderBindingTable sbt = {};
@@ -302,33 +288,19 @@ void renderImpl(std::shared_ptr<Config> config, const fs::path& scenePath,
 
         struct DriverHelperImpl final : DriverHelperAPI {
         private:
-            CameraAdapter& mCamera;
             OptixShaderBindingTable& mSBT;
-            std::vector<Data>& mCallable;
             OptixPipeline mPipeline;
-            LaunchParam mParam;
+            CUdeviceptr mParam;
 
         public:
-            DriverHelperImpl(CameraAdapter& camera,
-                             OptixShaderBindingTable& sbt,
-                             std::vector<Data>& callable, OptixPipeline& pipe,
-                             LaunchParam param)
-                : mCamera(camera), mSBT(sbt), mCallable(callable),
-                  mPipeline(pipe), mParam(param) {}
-            void doRender(Uint2 size,
-                          const std::function<void(OptixShaderBindingTable&)>&
+            DriverHelperImpl(OptixShaderBindingTable& sbt, OptixPipeline& pipe,
+                             CUdeviceptr param)
+                : mSBT(sbt), mPipeline(pipe), mParam(param) {}
+            void doRender(const std::function<void(OptixShaderBindingTable&)>&
                               callBack) override {
                 BUS_TRACE_BEG() {
-                    mCallable[static_cast<unsigned>(SBTSlot::generateRay)] =
-                        mCamera.prepare(size);
-                    Buffer buf =
-                        uploadSBTRecords(0, mCallable, mSBT.callablesRecordBase,
-                                         mSBT.callablesRecordStrideInBytes,
-                                         mSBT.callablesRecordCount);
                     callBack(mSBT);
-                    Buffer param = uploadParam(0, mParam);
-
-                    checkOptixError(optixLaunch(mPipeline, 0, asPtr(param),
+                    checkOptixError(optixLaunch(mPipeline, 0, mParam,
                                                 sizeof(mParam), &mSBT, size.x,
                                                 size.y, 1));
                     checkCudaError(cuStreamSynchronize(0));
@@ -340,17 +312,22 @@ void renderImpl(std::shared_ptr<Config> config, const fs::path& scenePath,
             }
         };
         std::vector<Data> callables(static_cast<unsigned>(SBTSlot::userOffset));
-        callables[static_cast<unsigned>(SBTSlot::samplePixel)] = idata.sbtData;
         callables[static_cast<unsigned>(SBTSlot::sampleOneLight)] =
             lsdata.sbtData;
+        callables[static_cast<unsigned>(SBTSlot::initSampler)] =
+            sdata.sbtData.front();
         callables.insert(callables.end(), callableData.begin(),
                          callableData.end());
-        callables.insert(callables.end(), sdata.sbtData.begin(),
+        callables.insert(callables.end(), sdata.sbtData.begin() + 1,
                          sdata.sbtData.end());
         for(auto&& light : lights)
             callables.push_back(light->getData().sbtData);
-        auto dHelper = std::make_unique<DriverHelperImpl>(
-            camera, sbt, callables, pipe, launchParam);
+        Buffer callableBuf = uploadSBTRecords(
+            0, callables, sbt.callablesRecordBase,
+            sbt.callablesRecordStrideInBytes, sbt.callablesRecordCount);
+        Buffer param = uploadParam(0, launchParam);
+        auto dHelper =
+            std::make_unique<DriverHelperImpl>(sbt, pipe, asPtr(param));
         reporter.apply(ReportLevel::Info, "Everything is ready.",
                        BUS_DEFSRCLOC());
         auto renderTs = Clock::now();

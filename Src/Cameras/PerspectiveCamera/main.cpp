@@ -35,14 +35,14 @@ public:
                                                     &group));
             mGroup.reset(group);
             CameraData res;
-            res.maxSampleDim = 4U;
+            res.maxSampleDim = 2U;
             res.group = mGroup.get();
             return res;
         }
         BUS_TRACE_END();
     }
     Data setArgs(float focalLength, float fStop, float focalDistance,
-                 Uint2 fullFilm, Vec3 pos, const Quat& posture) const override {
+                 Uint2 fullFilm, Vec3 pos, const Quat& posture) override {
         DataDesc data;
         focalLength /= 1e3f;
         float aperture = focalLength / fStop * 0.5f;

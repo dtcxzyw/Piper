@@ -2,7 +2,6 @@
 #include "PluginShared.hpp"
 
 enum class DataType { Object, Float, Unsigned, String, Bool, Array };
-namespace fs = std::experimental::filesystem;
 
 class Config : public Bus::ModuleFunctionBase {
 protected:

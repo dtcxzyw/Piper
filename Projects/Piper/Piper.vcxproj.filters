@@ -2,14 +2,12 @@
 <Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup>
     <ClCompile Include="..\..\Src\Piper\main.cpp" />
-    <ClCompile Include="..\..\Src\Piper\PluginShared.cpp">
-      <Filter>Shared</Filter>
-    </ClCompile>
     <ClCompile Include="..\..\Src\Piper\JsonConfig.cpp" />
     <ClCompile Include="..\..\Src\Piper\Renderer.cpp" />
     <ClCompile Include="..\..\Src\ThirdParty\Bus\BusImpl.cpp" />
     <ClCompile Include="..\..\Src\Piper\CameraAdapter.cpp" />
     <ClCompile Include="..\..\Src\Piper\Node.cpp" />
+    <ClCompile Include="..\..\Src\Piper\PluginShared.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\..\Src\Shared\CameraAPI.hpp">
@@ -57,11 +55,16 @@
     <ClInclude Include="..\..\Src\Shared\LightSamplerAPI.hpp">
       <Filter>Shared</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\Src\Piper\CameraAdapter.hpp" />
+    <ClInclude Include="..\..\Src\Shared\PhotographerAPI.hpp">
+      <Filter>Shared</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <Filter Include="Shared">
       <UniqueIdentifier>{c22b50c1-dca6-4552-9151-6b41c82effb1}</UniqueIdentifier>
     </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <CustomBuild Include="..\..\Src\Piper\KernelInclude.cu" />
   </ItemGroup>
 </Project>

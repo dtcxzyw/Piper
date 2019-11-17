@@ -8,7 +8,7 @@
 #define DEVICE extern "C" __device__
 #define GLOBAL extern "C" __global__
 #define CONSTANT static __constant__ __device__
-#define INLINEDEVICE __inline__ __device__
+#define INLINEDEVICE static __inline__ __device__
 
 constexpr float eps = 1e-8f;
 
@@ -22,10 +22,33 @@ using uint32 = unsigned int;
 
 extern "C" __constant__ LaunchParam launchParam;
 
-template <unsigned dim>
-INLINEDEVICE float sample(unsigned idx) {
-    return optixDirectCall<float, unsigned>(launchParam.samplerSbtOffset + dim,
-                                            idx);
+struct SamplerContext final {
+    unsigned index, dim;
+    __inline__ __device__ float operator()() {
+        return optixDirectCall<float, unsigned>(
+            launchParam.sampleOffset + (dim++), index);
+    }
+};
+
+struct SamplerInitResult final {
+    unsigned index;
+    float px, py;
+};
+
+INLINEDEVICE SamplerInitResult initSampler(unsigned i, unsigned x, unsigned y) {
+    return optixDirectCall<SamplerInitResult, unsigned, unsigned>(
+        static_cast<unsigned>(SBTSlot::initSampler), i, x, y);
+}
+
+struct RaySample final {
+    Vec3 ori, dir;
+};
+
+INLINEDEVICE LightSample sampleOneLight(const Vec3& pos, float rayTime,
+                                        SamplerContext& sampler) {
+    return optixContinuationCall<LightSample, const Vec3&, float,
+                                 SamplerContext&>(
+        static_cast<unsigned>(SBTSlot::sampleOneLight), pos, rayTime, sampler);
 }
 
 INLINEDEVICE float3 v2f(const Vec3& v) {
@@ -120,14 +143,10 @@ INLINEDEVICE Vec3 sqrtf(const Vec3& a) {
     return { sqrtf(a.x), sqrtf(a.y), sqrtf(a.z) };
 }
 
-struct RaySample final {
-    Vec3 ori, dir;
-};
-
 struct Payload final {
     Vec3 ori, wi;
     Spectrum f, rad;
-    uint32 index;
+    SamplerContext* sampler;
     bool hit;
 };
 
@@ -165,12 +184,6 @@ INLINEDEVICE Spectrum builtinTex2D(unsigned id, Vec2 uv) {
     if(id)
         return optixDirectCall<Spectrum, Vec2>(id, uv);
     return Spectrum{ 0.0f };
-}
-
-INLINEDEVICE LightSample sampleOneLight(const Vec3& pos, float rayTime,
-                                        uint32_t& seed) {
-    return optixContinuationCall<LightSample, const Vec3&, float, uint32_t&>(
-        static_cast<unsigned>(SBTSlot::sampleOneLight), pos, rayTime, seed);
 }
 
 // TODO:tangent from mesh

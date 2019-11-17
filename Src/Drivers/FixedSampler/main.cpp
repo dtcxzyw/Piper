@@ -1,5 +1,7 @@
 #include "../../Shared/ConfigAPI.hpp"
 #include "../../Shared/DriverAPI.hpp"
+#include "../../Shared/IntegratorAPI.hpp"
+#include "../../Shared/PhotographerAPI.hpp"
 #include "DataDesc.hpp"
 #include <fstream>
 #include <iostream>
@@ -18,6 +20,8 @@ private:
     unsigned mSample, mWidth, mHeight;
     bool mFiltBadColor;
     ProgramGroup mMissRad, mMissOcc, mRayGen, mException;
+    std::shared_ptr<Photographer> mPhotographer;
+    std::shared_ptr<Integrator> mIntegrator;
 
 public:
     explicit FixedSampler(Bus::ModuleInstance& instance) : Driver(instance) {}
@@ -58,8 +62,17 @@ public:
             mException.reset(groups[1]);
             mMissRad.reset(groups[2]);
             mMissOcc.reset(groups[3]);
+            auto pgc = config->attribute("Phothgrapher");
+            mPhothgrapher = system().instantiateByName(
+                pgc->attribute("Plugin")->asString());
+            CameraData cdata = mPhotographer->init(helper, pgc);
+            auto igc = config->attribute("Integrator");
+            mIntegrator = system().instantiateByName(
+                igc->attribute("Plugin")->asString());
+            IntegratorData idata = mIntegrator->init(helper, igc);
             DriverData res;
             res.group.assign(groups, groups + 4);
+            res.size = Uint2{ mWidth, mHeight };
             return res;
         }
         BUS_TRACE_END();
@@ -90,14 +103,13 @@ public:
                 Buffer buf = uploadSBTRecords(helper->getStream(), missSBT, ptr,
                                               stride, count);
 
-                helper->doRender(
-                    { mWidth, mHeight }, [&](OptixShaderBindingTable& table) {
-                        table.exceptionRecord = asPtr(exceptionSBT);
-                        table.raygenRecord = asPtr(rayGenSBT);
-                        table.missRecordCount = count;
-                        table.missRecordBase = ptr;
-                        table.missRecordStrideInBytes = stride;
-                    });
+                helper->doRender([&](OptixShaderBindingTable& table) {
+                    table.exceptionRecord = asPtr(exceptionSBT);
+                    table.raygenRecord = asPtr(rayGenSBT);
+                    table.missRecordCount = count;
+                    table.missRecordBase = ptr;
+                    table.missRecordStrideInBytes = stride;
+                });
                 std::stringstream ss;
                 ss.precision(2);
                 ss << std::fixed << "Process:" << (i + 1) * 100.0 / mSample

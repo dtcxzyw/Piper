@@ -10,7 +10,7 @@
 
 BUS_MODULE_NAME("Piper.Builtin.PluginHelper");
 
-static std::string loadPTX(const fs::path& path) {
+static std::string loadStr(const fs::path& path) {
     BUS_TRACE_BEG() {
         auto size = fs::file_size(path);
         std::ifstream in(path, std::ios::in | std::ios::binary);
@@ -44,6 +44,7 @@ private:
     std::unordered_map<std::string, Module> mModules;
     std::unordered_map<std::string, std::shared_ptr<Asset>> mAssets;
     std::unordered_map<std::string, std::shared_ptr<Config>> mAssetConfig;
+    std::string mKernelInclude;
 
     std::shared_ptr<Asset>
     instantiateAssetImpl(Name api, std::shared_ptr<Config> cfg) override {
@@ -89,6 +90,8 @@ public:
         for(auto&& asset : assCfg->expand()) {
             mAssetConfig[asset->attribute("Name")->asString()] = asset;
         }
+        // TODO:compress KernelInclude.hpp
+        mKernelInclude = loadStr("KernelInclude.hpp");
     }
     unsigned addCallable(OptixProgramGroup group, const Data& sbtData) {
         mGroups.insert(group);
@@ -134,7 +137,7 @@ public:
         BUS_TRACE_END();
     }
     OptixModule loadModuleFromFile(const fs::path& file) override {
-        return loadModuleFromPTX(loadPTX(file));
+        return loadModuleFromPTX(loadStr(file));
     }
     OptixModule loadModuleFromSrc(const std::string& src) override;
 };
@@ -164,15 +167,14 @@ struct NVRTCProgramDeleter final {
     }
 };
 
-static const char* header = R"#()#";
-
 OptixModule PluginHelperImpl::loadModuleFromSrc(const std::string& src) {
     BUS_TRACE_BEG() {
         // TODO:PTX Caching
         using Program = std::unique_ptr<_nvrtcProgram, NVRTCProgramDeleter>;
         Program program;
         nvrtcProgram prog;
-        const char* headerName = "runtime.hpp";
+        const char* headerName = "KernelInclude.hpp";
+        const char* header = mKernelInclude.c_str();
         checkNVRTCError(nvrtcCreateProgram(&prog, src.c_str(), "kernel.cu", 1,
                                            &header, &headerName));
         program.reset(prog);

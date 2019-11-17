@@ -4,6 +4,7 @@
 struct SamplerData final {
     std::vector<Data> sbtData;
     std::vector<OptixProgramGroup> group;
+    unsigned maxSPP;
 };
 
 class Sampler : public Bus::ModuleFunctionBase {
@@ -17,6 +18,6 @@ public:
     }
 
     virtual SamplerData init(PluginHelper helper,
-                             std::shared_ptr<Config> config,
+                             std::shared_ptr<Config> config, Uint2 size,
                              unsigned maxDim) = 0;
 };

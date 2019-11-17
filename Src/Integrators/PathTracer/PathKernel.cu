@@ -1,21 +1,22 @@
 #include "../../Shared/KernelShared.hpp"
 #include "DataDesc.hpp"
 
-DEVICE Vec4 __continuation_callable__traceKernel(uint32 id, Uint2 pixelPos) {
+DEVICE Vec4 __continuation_callable__traceKernel(unsigned sampleOffset,
+                                                 unsigned x, unsigned y) {
     Spectrum res = Spectrum{ 0.0f };
     auto data = getSBTData<DataDesc>();
     Payload payload;
     uint32_t p0, p1;
     packPointer(&payload, p0, p1);
     for(unsigned i = 0; i < data->sample; ++i) {
-        unsigned base = i * 0x45e1c2f2 + pixelPos.x * 0x1a5b2d42 +
-            pixelPos.y * 0x24215fea + 0xfec87421;
-        unsigned seed = (((id * data->sample + base) ^ 0xc3fea875) + base) ^ id;
-        RaySample ray = optixDirectCall<RaySample, Uint2, unsigned&>(
-            static_cast<unsigned>(SBTSlot::generateRay), pixelPos, seed);
+        unsigned index = sampleOffset * data->sample + i;
+        SamplerInitResult initRes = initSampler(index, x, y);
+        SamplerContext sampler;
+        sampler.dim = 0, sampler.index = initRes.index;
+        RaySample ray = generateRay(initRes.px, initRes.py, sampler);
         Spectrum att{ 1.0f };
         for(unsigned j = 0; j < data->maxDepth; ++j) {
-            payload.index = seed;
+            payload.sampler = &sampler;
             payload.hit = false;
             payload.f = Spectrum{ 0.0f };
             payload.rad = Spectrum{ 0.0f };

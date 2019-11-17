@@ -5,11 +5,15 @@
 #include <random>
 #include <sstream>
 #pragma warning(push, 0)
+#define NOMINMAX
 #include <optix_function_table_definition.h>
 #include <optix_stubs.h>
 #pragma warning(pop)
 
 // http://gruenschloss.org/halton/halton.zip
+// Enumerating Quasi-Monte Carlo Point Sequences in Elementary Intervals
+// http://gruenschloss.org/sample-enum/sample-enum.pdf
+
 // Copyright (c) 2012 Leonhard Gruenschloss (leonhard@gruenschloss.org)
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -104,10 +108,10 @@ unsigned invert(unsigned base, unsigned digits, unsigned index,
 }
 
 void genCode(std::stringstream& ss, const std::vector<unsigned>& perms,
-             unsigned base, unsigned maxTableSize, unsigned kth) {
+             unsigned base, unsigned maxTableSize) {
     // Special case: radical inverse in base 2, with direct bit reversal.
     if(base == 2) {
-        ss << R"#(extern "C" __device__ float __direct_callable__sample0(unsigned idx) {
+        ss << R"#(extern "C" __device__ float __direct_callable__sample2(unsigned idx) {
     idx = (idx << 16) | (idx >> 16);
     idx = ((idx & 0x00ff00ff) << 8) | ((idx & 0xff00ff00) >> 8);
     idx = ((idx & 0x0f0f0f0f) << 4) | ((idx & 0xf0f0f0f0) >> 4);
@@ -138,7 +142,7 @@ void genCode(std::stringstream& ss, const std::vector<unsigned>& perms,
             ss << invert(base, digits, i, perms);
         }
         ss << "};\nextern \"C\" __device__ float __direct_callable__sample"
-           << kth << "(unsigned idx) {\n";
+           << base << "(unsigned idx) {\n";
         ss << "return (LUT" << base << "[idx % " << powBase << "u] * " << power
            << "u + ";
         unsigned div = 1;
@@ -154,16 +158,12 @@ void genCode(std::stringstream& ss, const std::vector<unsigned>& perms,
     }
 }
 
-std::string generateSoruce(unsigned maxDim, std::shared_ptr<Config> config,
-                           Bus::Reporter& reporter) {
+void generateSample(std::stringstream& out, unsigned maxDim,
+                    std::shared_ptr<Config> config, Bus::Reporter& reporter,
+                    const std::vector<unsigned>& primeTable) {
     BUS_TRACE_BEG() {
-        if(maxDim == 0) {
-            reporter.apply(ReportLevel::Warning, "MaxDim==0", BUS_DEFSRCLOC());
-            return "";
-        }
         if(maxDim > 256)
             BUS_TRACE_THROW(std::runtime_error("Need MaxDim<=256"));
-        std::vector<unsigned> primeTable = getPrimeTable(maxDim);
         std::string initType = config->getString("Type", "Faure");
         unsigned maxTableSize = config->getUint("MaxPermTableSize", 500U);
         if(maxTableSize > 65536)
@@ -200,18 +200,96 @@ std::string generateSoruce(unsigned maxDim, std::shared_ptr<Config> config,
                     perms = initRandom(primeTable.back(), dev);
             }
         }
-        std::stringstream ss;
-        ss.precision(15);
+        out.precision(15);
         for(unsigned i = 0; i < maxDim; ++i) {
             unsigned base = primeTable[i];
-            genCode(ss, perms[base], base, maxTableSize, i);
+            genCode(out, perms[base], base, maxTableSize);
         }
-        return ss.str();
     }
     BUS_TRACE_END();
 }
 
-// TODO:correct sampling(max->sum)
+struct DataDesc final {
+    unsigned p2, p3, x, y, increment;
+    float scaleX, scaleY;
+};
+
+static inline std::pair<int, int> extendedEuclid(const int a, const int b) {
+    if(!b)
+        return std::make_pair(1u, 0u);
+    const int q = a / b;
+    const int r = a % b;
+    const std::pair<int, int> st = extendedEuclid(b, r);
+    return std::make_pair(st.second, st.first - q * st.second);
+}
+
+unsigned generateInit(std::stringstream& ss, Uint2 size, DataDesc& desc) {
+    desc.p2 = 0;
+    // Find 2^p2 >= width.
+    unsigned w = 1;
+    while(w < size.x) {
+        ++desc.p2;
+        w *= 2;
+    }
+    desc.scaleX = static_cast<float>(w);
+
+    desc.p3 = 0;
+    // Find 3^p3 >= height.
+    unsigned h = 1;
+    while(h < size.y) {
+        ++desc.p3;
+        h *= 3;
+    }
+    desc.scaleY = static_cast<float>(h);
+    desc.increment = w * h;  // There's exactly one sample per pixel.
+
+    // Determine the multiplicative inverses.
+    const std::pair<int, int> inv = extendedEuclid(h, w);
+    const unsigned inv2 = (inv.first < 0) ? (inv.first + w) : (inv.first % w);
+    const unsigned inv3 =
+        (inv.second < 0) ? (inv.second + h) : (inv.second % h);
+    desc.x = h * inv2;
+    desc.y = w * inv3;
+    ss << R"#(static __device__  inline unsigned inverse2(unsigned index, const unsigned digits) {
+    index = (index << 16) | (index >> 16);
+    index = ((index & 0x00ff00ff) << 8) | ((index & 0xff00ff00) >> 8);
+    index = ((index & 0x0f0f0f0f) << 4) | ((index & 0xf0f0f0f0) >> 4);
+    index = ((index & 0x33333333) << 2) | ((index & 0xcccccccc) >> 2);
+    index = ((index & 0x55555555) << 1) | ((index & 0xaaaaaaaa) >> 1);
+    return index >> (32 - digits);
+}
+static __device__ inline unsigned inverse3(unsigned index, const unsigned digits) {
+    unsigned result = 0;
+    for (unsigned d = 0; d < digits; ++d)
+    {
+        result = result * 3 + index % 3;
+        index /= 3;
+    }
+    return result;
+}
+
+struct DataDesc final {
+    unsigned p2, p3, x, y, increment;
+    float scaleX, scaleY;
+};
+
+extern "C" __device__  inline SamplerInitResult __direct_callable__init(const unsigned i, const unsigned x, const unsigned y) {
+    const DataDesc* data = getSBTData<DataDesc>();
+    // Promote to 64 bits to avoid overflow.
+    const unsigned long long hx = inverse2(x, data->p2);
+    const unsigned long long hy = inverse3(y, data->p3);
+    // Apply Chinese remainder theorem.
+    const unsigned offset = static_cast<unsigned>((hx * data->x + hy * data->y) % data->increment);
+    SamplerInitResult res;
+    res.index = offset + i * data->increment;
+    res.px = __direct_callable__sample2(res.index) * data->scaleX;
+    res.py = __direct_callable__sample3(res.index) * data->scaleY;
+    return res;
+}
+)#";
+    return ~0u / desc.increment;
+}
+
 class Halton final : public Sampler {
 private:
     std::vector<ProgramGroup> mPrograms;
@@ -219,17 +297,37 @@ private:
 public:
     explicit Halton(Bus::ModuleInstance& instance) : Sampler(instance) {}
     SamplerData init(PluginHelper helper, std::shared_ptr<Config> config,
-                     unsigned maxDim) override {
+                     Uint2 size, unsigned maxDim) override {
         BUS_TRACE_BEG() {
-            std::string src = generateSoruce(maxDim, config, reporter());
-            // reporter().apply(ReportLevel::Debug, "Source:\n" + src,
-            // BUS_DEFSRCLOC());
+            std::vector<unsigned> primeTable = getPrimeTable(maxDim + 2);
+            std::stringstream ss;
+            ss << "#include <KernelShared.hpp>" << std::endl;
+            generateSample(ss, maxDim + 2, config, reporter(), primeTable);
+            DataDesc data;
+            SamplerData res;
+            res.maxSPP = generateInit(ss, size, data);
+            reporter().apply(ReportLevel::Debug,
+                             "maxSPP=" + std::to_string(res.maxSPP),
+                             BUS_DEFSRCLOC());
+            auto src = ss.str();
+            reporter().apply(ReportLevel::Debug, "Source:\n" + src,
+                             BUS_DEFSRCLOC());
             OptixModule mod = helper->loadModuleFromSrc(src);
-            std::vector<std::string> funcNames;
             std::vector<OptixProgramGroupDesc> descs;
+            // init
+            {
+                OptixProgramGroupDesc desc = {};
+                desc.flags = 0;
+                desc.kind = OPTIX_PROGRAM_GROUP_KIND_CALLABLES;
+                desc.callables.moduleDC = mod;
+                desc.callables.entryFunctionNameDC = "__direct_callable__init";
+                descs.emplace_back(desc);
+            }
+            std::vector<std::string> funcNames;
             for(unsigned i = 0; i < maxDim; ++i) {
+                unsigned base = primeTable[i + 2];
                 funcNames.emplace_back("__direct_callable__sample" +
-                                       std::to_string(i));
+                                       std::to_string(base));
                 OptixProgramGroupDesc desc = {};
                 desc.flags = 0;
                 desc.kind = OPTIX_PROGRAM_GROUP_KIND_CALLABLES;
@@ -237,16 +335,20 @@ public:
                 desc.callables.entryFunctionNameDC = funcNames.back().c_str();
                 descs.emplace_back(desc);
             }
-            std::vector<OptixProgramGroup> pgs(maxDim);
+            std::vector<OptixProgramGroup> pgs(descs.size());
             OptixProgramGroupOptions opt = {};
-            checkOptixError(optixProgramGroupCreate(
-                helper->getContext(), descs.data(), maxDim, &opt, nullptr,
-                nullptr, pgs.data()));
+            checkOptixError(
+                optixProgramGroupCreate(helper->getContext(), descs.data(),
+                                        static_cast<unsigned>(descs.size()),
+                                        &opt, nullptr, nullptr, pgs.data()));
             for(auto prog : pgs)
                 mPrograms.emplace_back(prog);
-            SamplerData res;
-            for(auto&& prog : mPrograms)
-                res.sbtData.emplace_back(packEmptySBTRecord(prog.get()));
+            for(auto prog : pgs) {
+                if(prog == pgs.front())
+                    res.sbtData.emplace_back(packSBTRecord(prog, data));
+                else
+                    res.sbtData.emplace_back(packEmptySBTRecord(prog));
+            }
             res.group = pgs;
             return res;
         }

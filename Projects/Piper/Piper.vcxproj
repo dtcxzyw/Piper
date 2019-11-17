@@ -99,7 +99,18 @@
     <ClCompile Include="..\..\Src\ThirdParty\Bus\BusImpl.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="..\..\Src\Piper\CameraAdapter.hpp" />
+    <CustomBuild Include="..\..\Src\Piper\KernelInclude.cu">
+      <Message Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Build %(FIlename)</Message>
+      <Message Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Build %(FIlename)</Message>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">nvcc %(FullPath) -o $(TargetDir)%(Filename).hpp  -I "$(CUDA_PATH)\include";"$(OPTIX_PATH)\include" --preprocess -O2 -m64 -arch=sm_50 -use_fast_math -w -rdc=true </Command>
+      <LinkObjects Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">false</LinkObjects>
+      <BuildInParallel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</BuildInParallel>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Release|x64'">nvcc %(FullPath) -o $(TargetDir)%(Filename).hpp  -I "$(CUDA_PATH)\include";"$(OPTIX_PATH)\include" --preprocess -O2 -m64 -arch=sm_50 -use_fast_math -w -rdc=true </Command>
+      <LinkObjects Condition="'$(Configuration)|$(Platform)'=='Release|x64'">false</LinkObjects>
+      <BuildInParallel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</BuildInParallel>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">$(TargetDir)%(Filename).hpp</Outputs>
+      <Outputs Condition="'$(Configuration)|$(Platform)'=='Release|x64'">$(TargetDir)%(Filename).hpp</Outputs>
+    </CustomBuild>
     <ClInclude Include="..\..\Src\Shared\CameraAPI.hpp" />
     <ClInclude Include="..\..\Src\Shared\CommandAPI.hpp" />
     <ClInclude Include="..\..\Src\Shared\ConfigAPI.hpp" />
@@ -111,6 +122,7 @@
     <ClInclude Include="..\..\Src\Shared\LightSamplerAPI.hpp" />
     <ClInclude Include="..\..\Src\Shared\MaterialAPI.hpp" />
     <ClInclude Include="..\..\Src\Shared\OptixHelper.hpp" />
+    <ClInclude Include="..\..\Src\Shared\PhotographerAPI.hpp" />
     <ClInclude Include="..\..\Src\Shared\PluginShared.hpp" />
     <ClInclude Include="..\..\Src\Shared\SamplerAPI.hpp" />
     <ClInclude Include="..\..\Src\Shared\Shared.hpp" />

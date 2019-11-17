@@ -1,13 +1,12 @@
 #include "../Shared/CommandAPI.hpp"
 #include "../Shared/ConfigAPI.hpp"
 #include "../Shared/GeometryAPI.hpp"
+#include "../Shared/PhotographerAPI.hpp"
 #pragma warning(push, 0)
 #include "../ThirdParty/Bus/BusSystem.hpp"
 #include <rang.hpp>
 #pragma warning(pop)
 #include <sstream>
-
-namespace fs = std::experimental::filesystem;
 
 BUS_MODULE_NAME("Piper.Main");
 
@@ -94,6 +93,8 @@ std::shared_ptr<Bus::ModuleFunctionBase>
 makeRenderer(Bus::ModuleInstance& instance);
 std::shared_ptr<Bus::ModuleFunctionBase>
 makeNode(Bus::ModuleInstance& instance);
+std::shared_ptr<Bus::ModuleFunctionBase>
+makeCameraAdapter(Bus::ModuleInstance& instance);
 
 class BuiltinFunction final : public Bus::ModuleInstance {
 public:
@@ -116,6 +117,8 @@ public:
             return { "Renderer" };
         if(api == Geometry::getInterface())
             return { "Node" };
+        if(api == Photographer::getInterface())
+            return { "CameraAdapter" };
         return {};
     }
     std::shared_ptr<Bus::ModuleFunctionBase> instantiate(Name name) override {
@@ -125,6 +128,8 @@ public:
             return makeRenderer(*this);
         if(name == "Node")
             return makeNode(*this);
+        if(name == "CameraAdapter")
+            return makeCameraAdapter(*this);
         return nullptr;
     }
 };

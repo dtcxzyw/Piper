@@ -3,7 +3,7 @@
 
 struct IntegratorData final {
     Data sbtData;
-    unsigned maxSampleDim;
+    unsigned maxSampleDim, dimFactor;
     OptixProgramGroup group;
 };
 
