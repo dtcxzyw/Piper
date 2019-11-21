@@ -102,10 +102,10 @@
     <CustomBuild Include="..\..\Src\Piper\KernelInclude.cu">
       <Message Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Build %(FIlename)</Message>
       <Message Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Build %(FIlename)</Message>
-      <Command Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">nvcc %(FullPath) -o $(TargetDir)%(Filename).hpp  -I "$(CUDA_PATH)\include";"$(OPTIX_PATH)\include" --preprocess -O2 -m64 -arch=sm_50 -use_fast_math -w -rdc=true </Command>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">nvcc %(FullPath) -o $(TargetDir)%(Filename).hpp  -I "$(CUDA_PATH)\include";"$(OPTIX_PATH)\include" -E -cudart=none -w  -D __CUDA_RUNTIME_H__ -D _CMATH_ -D _YVALS -D NDEBUG -D _VCRUNTIME_H -D _XTR1COMMON_ -D _CSTDDEF_ -D _CSTDLIB_ -D _INITIALIZER_LIST_ -D _TYPE_TRAITS_ -D _CSTDIO_ -D _CWCHAR_ -D _XSTDDEF_</Command>
       <LinkObjects Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">false</LinkObjects>
       <BuildInParallel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</BuildInParallel>
-      <Command Condition="'$(Configuration)|$(Platform)'=='Release|x64'">nvcc %(FullPath) -o $(TargetDir)%(Filename).hpp  -I "$(CUDA_PATH)\include";"$(OPTIX_PATH)\include" --preprocess -O2 -m64 -arch=sm_50 -use_fast_math -w -rdc=true </Command>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Release|x64'">nvcc %(FullPath) -o $(TargetDir)%(Filename).hpp  -I "$(CUDA_PATH)\include";"$(OPTIX_PATH)\include" -E -cudart=none -w  -D __CUDA_RUNTIME_H__ -D _CMATH_ -D _YVALS -D NDEBUG -D _VCRUNTIME_H -D _XTR1COMMON_ -D _CSTDDEF_ -D _CSTDLIB_ -D _INITIALIZER_LIST_ -D _TYPE_TRAITS_ -D _CSTDIO_ -D _CWCHAR_ -D _XSTDDEF_</Command>
       <LinkObjects Condition="'$(Configuration)|$(Platform)'=='Release|x64'">false</LinkObjects>
       <BuildInParallel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</BuildInParallel>
       <Outputs Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">$(TargetDir)%(Filename).hpp</Outputs>

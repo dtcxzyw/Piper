@@ -9,7 +9,7 @@
 
 namespace MDL = mi::neuraylib;
 using mi::base::Handle;
-namespace fs = std::experimental::filesystem;
+namespace fs = std::filesystem;
 
 #define checkMDLErrorEQ(expr)                                                  \
     do {                                                                       \

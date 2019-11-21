@@ -142,7 +142,7 @@ void genCode(std::stringstream& ss, const std::vector<unsigned>& perms,
             ss << invert(base, digits, i, perms);
         }
         ss << "};\nextern \"C\" __device__ float __direct_callable__sample"
-           << base << "(unsigned idx) {\n";
+           << base << "(unsigned idx) {";
         ss << "return (LUT" << base << "[idx % " << powBase << "u] * " << power
            << "u + ";
         unsigned div = 1;
@@ -260,8 +260,7 @@ unsigned generateInit(std::stringstream& ss, Uint2 size, DataDesc& desc) {
 }
 static __device__ inline unsigned inverse3(unsigned index, const unsigned digits) {
     unsigned result = 0;
-    for (unsigned d = 0; d < digits; ++d)
-    {
+    for (unsigned d = 0; d < digits; ++d) {
         result = result * 3 + index % 3;
         index /= 3;
     }
@@ -273,7 +272,7 @@ struct DataDesc final {
     float scaleX, scaleY;
 };
 
-extern "C" __device__  inline SamplerInitResult __direct_callable__init(const unsigned i, const unsigned x, const unsigned y) {
+extern "C" __device__ SamplerInitResult __direct_callable__init(const unsigned i, const unsigned x, const unsigned y) {
     const DataDesc* data = getSBTData<DataDesc>();
     // Promote to 64 bits to avoid overflow.
     const unsigned long long hx = inverse2(x, data->p2);
@@ -290,6 +289,7 @@ extern "C" __device__  inline SamplerInitResult __direct_callable__init(const un
     return ~0u / desc.increment;
 }
 
+// TODO:ptx caching
 class Halton final : public Sampler {
 private:
     std::vector<ProgramGroup> mPrograms;
@@ -301,7 +301,7 @@ public:
         BUS_TRACE_BEG() {
             std::vector<unsigned> primeTable = getPrimeTable(maxDim + 2);
             std::stringstream ss;
-            ss << "#include <KernelShared.hpp>" << std::endl;
+            ss << "#include <KernelInclude.hpp>" << std::endl;
             generateSample(ss, maxDim + 2, config, reporter(), primeTable);
             DataDesc data;
             SamplerData res;
@@ -310,8 +310,10 @@ public:
                              "maxSPP=" + std::to_string(res.maxSPP),
                              BUS_DEFSRCLOC());
             auto src = ss.str();
+            /*
             reporter().apply(ReportLevel::Debug, "Source:\n" + src,
                              BUS_DEFSRCLOC());
+                             */
             OptixModule mod = helper->loadModuleFromSrc(src);
             std::vector<OptixProgramGroupDesc> descs;
             // init

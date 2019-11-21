@@ -17,7 +17,8 @@ BUS_MODULE_NAME("Piper.BuiltinDriver.FixedSampler");
 class FixedSampler final : public Driver {
 private:
     fs::path mOutput;
-    unsigned mSample, mWidth, mHeight;
+    unsigned mSampleCount, mSamplePerLaunch, mGenerateRay, mSampleOnePixel;
+    Uint2 mFilmSize;
     bool mFiltBadColor;
     ProgramGroup mMissRad, mMissOcc, mRayGen, mException;
     std::shared_ptr<Photographer> mPhotographer;
@@ -29,9 +30,9 @@ public:
                     std::shared_ptr<Config> config) override {
         BUS_TRACE_BEG() {
             mOutput = config->attribute("Output")->asString();
-            mSample = config->attribute("Sample")->asUint();
-            mWidth = config->attribute("Width")->asUint();
-            mHeight = config->attribute("Height")->asUint();
+            mSampleCount = config->attribute("SampleCount")->asUint();
+            mSamplePerLaunch = config->attribute("SamplePerLaunch")->asUint();
+            mFilmSize = config->attribute("FilmSize")->asUint2();
             mFiltBadColor = config->getBool("FiltBadColor", false);
             OptixModule mod = helper->loadModuleFromFile(
                 modulePath().parent_path() / "Kernel.ptx");
@@ -62,17 +63,24 @@ public:
             mException.reset(groups[1]);
             mMissRad.reset(groups[2]);
             mMissOcc.reset(groups[3]);
-            auto pgc = config->attribute("Phothgrapher");
-            mPhothgrapher = system().instantiateByName(
+            auto pgc = config->attribute("Photographer");
+            mPhotographer = system().instantiateByName<Photographer>(
                 pgc->attribute("Plugin")->asString());
             CameraData cdata = mPhotographer->init(helper, pgc);
+            mGenerateRay = helper->addCallable(
+                cdata.group, mPhotographer->prepareFrame(mFilmSize));
             auto igc = config->attribute("Integrator");
-            mIntegrator = system().instantiateByName(
+            mIntegrator = system().instantiateByName<Integrator>(
                 igc->attribute("Plugin")->asString());
             IntegratorData idata = mIntegrator->init(helper, igc);
+            mSampleOnePixel = helper->addCallable(idata.group, idata.sbtData);
             DriverData res;
+            res.maxTraceDepth = idata.maxTraceDepth;
+            res.maxSampleDim = cdata.maxSampleDim + idata.maxSampleDim;
             res.group.assign(groups, groups + 4);
-            res.size = Uint2{ mWidth, mHeight };
+            res.size = mFilmSize;
+            res.maxSPP = mSampleCount * mSamplePerLaunch;
+            // TODO:own Sampler
             return res;
         }
         BUS_TRACE_END();
@@ -81,14 +89,18 @@ public:
         BUS_TRACE_BEG() {
             DataDesc data;
             data.filtBadColor = mFiltBadColor;
-            data.height = mHeight;
-            data.width = mWidth;
-            Buffer output = allocBuffer(sizeof(Vec4) * mWidth * mHeight, 16);
-            checkCudaError(cuMemsetD16(asPtr(output), 0,
-                                       sizeof(Vec4) / 16 * mWidth * mHeight));
+            data.width = mFilmSize.x;
+            data.height = mFilmSize.y;
+            data.sampleOnePixel = mSampleOnePixel;
+            data.generateRay = mGenerateRay;
+            size_t filmSize = mFilmSize.x * mFilmSize.y;
+            Buffer output = allocBuffer(sizeof(Vec4) * filmSize, 16);
+            checkCudaError(
+                cuMemsetD16(asPtr(output), 0, sizeof(Vec4) / 16 * filmSize));
             data.outputBuffer = static_cast<Vec4*>(output.get());
-            for(unsigned i = 0; i < mSample; ++i) {
-                data.sampleIdx = i;
+            for(unsigned i = 0; i < mSampleCount; ++i) {
+                data.sampleIdxBeg = i * mSamplePerLaunch;
+                data.sampleIdxEnd = data.sampleIdxBeg + mSamplePerLaunch;
                 Buffer rayGenSBT = uploadData(
                     helper->getStream(), packSBTRecord(mRayGen.get(), data));
                 Buffer exceptionSBT = uploadData(
@@ -112,18 +124,16 @@ public:
                 });
                 std::stringstream ss;
                 ss.precision(2);
-                ss << std::fixed << "Process:" << (i + 1) * 100.0 / mSample
+                ss << std::fixed << "Process:" << (i + 1) * 100.0 / mSampleCount
                    << "%" << std::endl;
                 reporter().apply(ReportLevel::Info, ss.str(), BUS_DEFSRCLOC());
             }
             {
                 checkCudaError(cuStreamSynchronize(helper->getStream()));
-                std::vector<Vec4> arr =
-                    downloadData<Vec4>(output, 0, mWidth * mHeight);
-                unsigned size = mWidth * mHeight;
-                std::vector<Imf::Rgba> rgba(mWidth * mHeight);
+                std::vector<Vec4> arr = downloadData<Vec4>(output, 0, filmSize);
+                std::vector<Imf::Rgba> rgba(filmSize);
                 bool badColor = false;
-                for(unsigned i = 0; i < size; ++i) {
+                for(size_t i = 0; i < filmSize; ++i) {
                     if(isfinite(arr[i].x) && isfinite(arr[i].y) &&
                        isfinite(arr[i].z) && isfinite(arr[i].w)) {
                         if(arr[i].w > 0.0f)
@@ -140,10 +150,11 @@ public:
                         ReportLevel::Warning, "Bad color!!!",
                         BUS_SRCLOC("Piper.BuiltinDriver.FixedSampler"));
                 try {
-                    Imf::RgbaOutputFile out(mOutput.string().c_str(), mWidth,
-                                            mHeight, Imf::WRITE_RGB);
-                    out.setFrameBuffer(rgba.data(), 1, mWidth);
-                    out.writePixels(mHeight);
+                    Imf::RgbaOutputFile out(mOutput.string().c_str(),
+                                            mFilmSize.x, mFilmSize.y,
+                                            Imf::WRITE_RGB);
+                    out.setFrameBuffer(rgba.data(), 1, mFilmSize.x);
+                    out.writePixels(mFilmSize.y);
                 } catch(...) {
                     std::throw_with_nested(std::runtime_error(
                         "Failed to save output file " + mOutput.string()));

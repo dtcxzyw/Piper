@@ -1,5 +1,5 @@
-#include "../../Shared/IntegratorAPI.hpp"
 #include "../../Shared/ConfigAPI.hpp"
+#include "../../Shared/IntegratorAPI.hpp"
 #include "DataDesc.hpp"
 #pragma warning(push, 0)
 #include <optix_function_table_definition.h>
@@ -33,10 +33,10 @@ public:
             mGroup.reset(group);
             DataDesc data;
             data.maxDepth = config->attribute("MaxDepth")->asUint();
-            data.sample = config->attribute("Sample")->asUint();
             IntegratorData res;
             res.sbtData = packSBTRecord(mGroup.get(), data);
             res.maxSampleDim = 0;
+            res.maxTraceDepth = data.maxDepth;
             res.group = mGroup.get();
             return res;
         }

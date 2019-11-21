@@ -966,7 +966,7 @@ DEVICE void __continuation_callable__sample(Payload* payload, Vec3 dir,
                                             Vec2 texCoord, float rayTime,
                                             bool front) {
     auto data = getSBTData<DataDesc>();
-    uint32 seed = ++payload->index;
+    SamplerContext& sampler = *payload->sampler;
     MDL::Shading_state_material mat;
     ns = ng;
     mat.normal = v2f(ns);
@@ -1008,8 +1008,7 @@ DEVICE void __continuation_callable__sample(Payload* payload, Vec3 dir,
         }
 
         sampleF.k1 = v2f(-dir);
-        sampleF.xi =
-            make_float3(sample<0>(seed), sample<1>(seed), sample<2>(seed));
+        sampleF.xi = make_float3(sampler(), sampler(), sampler());
         bsdf_sample(&sampleF, &mat, &resData, nullptr, data->argData);
         payload->f = f2v(sampleF.bsdf_over_pdf);
         payload->wi = f2v(sampleF.k2);
@@ -1028,8 +1027,8 @@ DEVICE void __continuation_callable__sample(Payload* payload, Vec3 dir,
             evalF.ior1.x = MI_NEURAYLIB_BSDF_USE_MATERIAL_IOR;
             evalF.ior2 = make_float3(1.0f, 1.0f, 1.0f);
         }
-        LightSample ls = sampleOneLight(hit + (front ? offset : -offset),
-                                        rayTime, payload->index);
+        LightSample ls =
+            sampleOneLight(hit + (front ? offset : -offset), rayTime, sampler);
         evalF.k1 = v2f(-dir);
         evalF.k2 = v2f(ls.wi);
         bsdf_evaluate(&evalF, &mat, &resData, nullptr, data->argData);

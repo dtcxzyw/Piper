@@ -3,7 +3,7 @@
 
 DEVICE LightSample __continuation_callable__sample(const Vec3& pos,
                                                    float rayTime,
-                                                   uint32_t& seed) {
+                                                   SamplerContext& sampler) {
     auto light = getSBTData<DirLight>();
     Vec3 ori = pos - light->distance * light->direction;
     unsigned noHit = 0;

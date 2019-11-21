@@ -92,6 +92,21 @@ public:
         }
         // TODO:compress KernelInclude.hpp
         mKernelInclude = loadStr("KernelInclude.hpp");
+        auto removeCRT = [](std::string& str) {
+            auto beg = str.find("_CRT_BEGIN_C_HEADER");
+            if(beg == str.npos)
+                return false;
+            auto end = str.find("_CRT_END_C_HEADER");
+            str = str.substr(0, beg) + str.substr(end + 17);
+            return true;
+        };
+        while(removeCRT(mKernelInclude))
+            ;
+        /*
+        //Debug Output
+        std::ofstream out("out.hpp");
+        out << mKernelInclude << std::endl;
+        */
     }
     unsigned addCallable(OptixProgramGroup group, const Data& sbtData) {
         mGroups.insert(group);
@@ -157,7 +172,7 @@ buildPluginHelper(OptixDeviceContext context, Bus::ModuleSystem& sys,
 
 static void checkNVRTCError(nvrtcResult res) {
     if(res != NVRTC_SUCCESS)
-        throw std::runtime_error(std::string("NVRTCError") +
+        throw std::runtime_error(std::string("[NVRTCError]") +
                                  nvrtcGetErrorString(res));
 }
 
@@ -178,8 +193,8 @@ OptixModule PluginHelperImpl::loadModuleFromSrc(const std::string& src) {
         checkNVRTCError(nvrtcCreateProgram(&prog, src.c_str(), "kernel.cu", 1,
                                            &header, &headerName));
         program.reset(prog);
-        const char* opt[] = { "-use_fast_math", "-default-device",
-                              "-rdc=true" };
+        const char* opt[] = { "-use_fast_math", "-default-device", "-rdc=true",
+                              "-w", "-std=c++14" };
         try {
             checkNVRTCError(nvrtcCompileProgram(
                 program.get(), static_cast<int>(std::size(opt)), opt));

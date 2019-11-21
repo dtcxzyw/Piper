@@ -1,10 +1,10 @@
 #include "../../Shared/KernelShared.hpp"
 #include "DataDesc.hpp"
 
-DEVICE RaySample __direct_callable__sampleRay(Vec2 pixelPos,
+DEVICE RaySample __direct_callable__sampleRay(float px, float py,
                                               SamplerContext& sampler) {
     auto data = getSBTData<DataDesc>();
-    Vec3 ori = data->base + data->right * pixelPos.x + data->down * pixelPos.y;
+    Vec3 ori = data->base + data->right * px + data->down * py;
     Vec3 pinHoleDir = data->hole - ori;
     Vec3 focalPoint =
         ori + pinHoleDir * (data->focal / dot(data->axis, pinHoleDir));
@@ -16,3 +16,5 @@ DEVICE RaySample __direct_callable__sampleRay(Vec2 pixelPos,
     res.dir = normalize(focalPoint - res.ori);
     return res;
 }
+
+void check(RayGenerateFunction = __direct_callable__sampleRay);

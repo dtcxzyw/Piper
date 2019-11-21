@@ -8,7 +8,7 @@
 #define DEVICE extern "C" __device__
 #define GLOBAL extern "C" __global__
 #define CONSTANT static __constant__ __device__
-#define INLINEDEVICE static __inline__ __device__
+#define INLINEDEVICE __inline__ __device__
 
 constexpr float eps = 1e-8f;
 
@@ -35,6 +35,8 @@ struct SamplerInitResult final {
     float px, py;
 };
 
+using SamplerInitFunction = SamplerInitResult (*)(unsigned, unsigned, unsigned);
+
 INLINEDEVICE SamplerInitResult initSampler(unsigned i, unsigned x, unsigned y) {
     return optixDirectCall<SamplerInitResult, unsigned, unsigned>(
         static_cast<unsigned>(SBTSlot::initSampler), i, x, y);
@@ -43,6 +45,22 @@ INLINEDEVICE SamplerInitResult initSampler(unsigned i, unsigned x, unsigned y) {
 struct RaySample final {
     Vec3 ori, dir;
 };
+
+using RayGenerateFunction = RaySample (*)(float, float, SamplerContext&);
+
+INLINEDEVICE RaySample generateRay(unsigned id, float px, float py,
+                                   SamplerContext& sampler) {
+    return optixDirectCall<RaySample, float, float, SamplerContext&>(id, px, py,
+                                                                     sampler);
+}
+
+using PixelSampleFunction = Spectrum (*)(RaySample, SamplerContext*);
+
+INLINEDEVICE Spectrum sampleOnePixel(unsigned id, RaySample ray,
+                                     SamplerContext* sampler) {
+    return optixContinuationCall<Spectrum, RaySample, SamplerContext*>(id, ray,
+                                                                       sampler);
+}
 
 INLINEDEVICE LightSample sampleOneLight(const Vec3& pos, float rayTime,
                                         SamplerContext& sampler) {

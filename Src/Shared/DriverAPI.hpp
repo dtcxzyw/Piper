@@ -12,6 +12,7 @@ using DriverHelper = DriverHelperAPI*;
 
 struct DriverData final {
     std::vector<OptixProgramGroup> group;
+    unsigned maxSampleDim, maxTraceDepth, maxSPP;
     Uint2 size;
 };
 

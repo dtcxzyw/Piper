@@ -169,13 +169,13 @@ std::shared_ptr<LightSampler> loadLightSampler(std::shared_ptr<Config> config,
 
 std::shared_ptr<Sampler> loadSampler(std::shared_ptr<Config> config,
                                      PluginHelper helper,
-                                     Bus::ModuleSystem& sys, unsigned msd,
-                                     SamplerData& data) {
+                                     Bus::ModuleSystem& sys, Uint2 filmSize,
+                                     unsigned msd, SamplerData& data) {
     sys.getReporter().apply(Bus::ReportLevel::Info, "Loading sampler",
                             BUS_DEFSRCLOC());
     auto sampler =
         sys.instantiateByName<Sampler>(config->attribute("Plugin")->asString());
-    data = sampler->init(helper, config, msd);
+    data = sampler->init(helper, config, filmSize, msd);
     return sampler;
 }
 
@@ -219,14 +219,13 @@ void renderImpl(std::shared_ptr<Config> config, const fs::path& scenePath,
             MCO, PCO, callableData, hitGroupData, lights, groups);
 
         auto& reporter = sys.getReporter();
-        unsigned msd = 0;
 
         DriverData ddata;
         std::shared_ptr<Driver> driver =
             loadDriver(config->attribute("Driver"), helper.get(), sys, ddata);
         groups.insert(ddata.group.begin(), ddata.group.end());
 
-        // TODO:scene analysis
+        // TODO:scene analysis and optimization
         reporter.apply(ReportLevel::Info, "Loading scene graph",
                        BUS_DEFSRCLOC());
         Bus::FunctionId nodeClass{
@@ -234,12 +233,12 @@ void renderImpl(std::shared_ptr<Config> config, const fs::path& scenePath,
         };
         std::shared_ptr<Geometry> root = sys.instantiate<Geometry>(nodeClass);
         root->init(helper.get(), config->attribute("Scene"));
-        msd = std::max(msd, root->getData().maxSampleDim);
 
+        unsigned msdL = 0;
         for(auto&& light : lights) {
             auto data = light->getData();
-            msd = std::max(msd, data.maxSampleDim);
             groups.insert(data.group);
+            msdL = std::max(data.maxSampleDim, msdL);
         }
 
         // TODO:LightSamplerHelper
@@ -248,13 +247,28 @@ void renderImpl(std::shared_ptr<Config> config, const fs::path& scenePath,
             loadLightSampler(config->attribute("LightSampler"), helper.get(),
                              sys, lights.size(), lsdata);
         groups.insert(lsdata.group);
-        msd = std::max(msd, lsdata.maxSampleDim);
 
+        unsigned msdPerTrace =
+            root->getData().maxSampleDim + msdL + lsdata.maxSampleDim;
+        unsigned msd = ddata.maxSampleDim + ddata.maxTraceDepth * msdPerTrace;
+        reporter.apply(ReportLevel::Info,
+                       "maxSampleDimPerTrace=" + std::to_string(msdPerTrace),
+                       BUS_DEFSRCLOC());
+        reporter.apply(ReportLevel::Info, "maxSampleDim=" + std::to_string(msd),
+                       BUS_DEFSRCLOC());
         SamplerData sdata;
-        std::shared_ptr<Sampler> sampler = loadSampler(
-            config->attribute("Sampler"), helper.get(), sys, msd, sdata);
+        std::shared_ptr<Sampler> sampler =
+            loadSampler(config->attribute("Sampler"), helper.get(), sys,
+                        ddata.size, msd, sdata);
         groups.insert(sdata.group.begin(), sdata.group.end());
-
+        reporter.apply(ReportLevel::Info,
+                       "maxSamplePerPixel=" + std::to_string(sdata.maxSPP),
+                       BUS_DEFSRCLOC());
+        if(sdata.maxSPP < ddata.maxSPP)
+            reporter.apply(ReportLevel::Warning,
+                           "maxSamplePerPixel exceeds.(Need " +
+                               std::to_string(ddata.maxSPP) + ")",
+                           BUS_DEFSRCLOC());
         reporter.apply(ReportLevel::Info, "Compiling Pipeline",
                        BUS_DEFSRCLOC());
 
@@ -291,18 +305,19 @@ void renderImpl(std::shared_ptr<Config> config, const fs::path& scenePath,
             OptixShaderBindingTable& mSBT;
             OptixPipeline mPipeline;
             CUdeviceptr mParam;
+            Uint2 mSize;
 
         public:
             DriverHelperImpl(OptixShaderBindingTable& sbt, OptixPipeline& pipe,
-                             CUdeviceptr param)
-                : mSBT(sbt), mPipeline(pipe), mParam(param) {}
+                             CUdeviceptr param, Uint2 size)
+                : mSBT(sbt), mPipeline(pipe), mParam(param), mSize(size) {}
             void doRender(const std::function<void(OptixShaderBindingTable&)>&
                               callBack) override {
                 BUS_TRACE_BEG() {
                     callBack(mSBT);
                     checkOptixError(optixLaunch(mPipeline, 0, mParam,
-                                                sizeof(mParam), &mSBT, size.x,
-                                                size.y, 1));
+                                                sizeof(mParam), &mSBT, mSize.x,
+                                                mSize.y, 1));
                     checkCudaError(cuStreamSynchronize(0));
                 }
                 BUS_TRACE_END();
@@ -326,8 +341,8 @@ void renderImpl(std::shared_ptr<Config> config, const fs::path& scenePath,
             0, callables, sbt.callablesRecordBase,
             sbt.callablesRecordStrideInBytes, sbt.callablesRecordCount);
         Buffer param = uploadParam(0, launchParam);
-        auto dHelper =
-            std::make_unique<DriverHelperImpl>(sbt, pipe, asPtr(param));
+        auto dHelper = std::make_unique<DriverHelperImpl>(
+            sbt, pipe, asPtr(param), ddata.size);
         reporter.apply(ReportLevel::Info, "Everything is ready.",
                        BUS_DEFSRCLOC());
         auto renderTs = Clock::now();

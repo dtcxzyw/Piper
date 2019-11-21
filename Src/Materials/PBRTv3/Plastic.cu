@@ -18,16 +18,16 @@ DEVICE void __continuation_callable__sample(Payload* payload, Vec3 dir,
 
     LambertianReflection lr(Kd);
     MicrofacetReflection mr(Ks, roughness, FresnelDielectric(1.5f, 1.0f));
-    uint32 seed = ++payload->index;
-    bool choice = sample<0>(seed) < 0.5f;
-    Vec2 u = { sample<1>(seed), sample<2>(seed) };
+    SamplerContext& sampler = *payload->sampler;
+    bool choice = sampler() < 0.5f;
+    Vec2 u = { sampler(), sampler() };
     Vec3 wi = choice ? lr.sampleF(wo, u) : mr.sampleF(wo, u);
     float fpdf = 0.5f * (lr.pdf(wo, wi) + mr.pdf(wo, wi));
     if(fpdf >= eps)
         payload->f = (lr.f(wo, wi) + mr.f(wo, wi)) * (absCosTheta(wi) / fpdf);
     payload->wi = s2w * wi;
     payload->ori = hit + frontOffset;
-    LightSample ls = sampleOneLight(payload->ori, rayTime, payload->index);
+    LightSample ls = sampleOneLight(payload->ori, rayTime, sampler);
     wi = w2s * ls.wi;
     float lpdf = 0.5f * (lr.pdf(wo, wi) + mr.pdf(wo, wi));
     if(lpdf >= eps)
