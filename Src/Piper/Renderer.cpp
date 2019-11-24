@@ -188,9 +188,12 @@ void renderImpl(std::shared_ptr<Config> config, const fs::path& scenePath,
         auto global = config->attribute("Core");
         Context context = createContext(ctx.get(), sys.getReporter(), global);
         bool debug = global->attribute("Debug")->asBool();
+        // BUG:debug mode->exception -3
+        /*
         if(!debug) {
             checkCudaError(cuCtxSetLimit(CU_LIMIT_PRINTF_FIFO_SIZE, 0));
         }
+        */
 
         OptixModuleCompileOptions MCO = {};
         MCO.debugLevel = (debug ? OPTIX_COMPILE_DEBUG_LEVEL_FULL :
@@ -315,9 +318,10 @@ void renderImpl(std::shared_ptr<Config> config, const fs::path& scenePath,
                               callBack) override {
                 BUS_TRACE_BEG() {
                     callBack(mSBT);
+                    checkCudaError(cuStreamSynchronize(0));
                     checkOptixError(optixLaunch(mPipeline, 0, mParam,
-                                                sizeof(mParam), &mSBT, mSize.x,
-                                                mSize.y, 1));
+                                                sizeof(LaunchParam), &mSBT,
+                                                mSize.x, mSize.y, 1));
                     checkCudaError(cuStreamSynchronize(0));
                 }
                 BUS_TRACE_END();
@@ -341,12 +345,13 @@ void renderImpl(std::shared_ptr<Config> config, const fs::path& scenePath,
             0, callables, sbt.callablesRecordBase,
             sbt.callablesRecordStrideInBytes, sbt.callablesRecordCount);
         Buffer param = uploadParam(0, launchParam);
+        checkCudaError(cuStreamSynchronize(0));
         auto dHelper = std::make_unique<DriverHelperImpl>(
             sbt, pipe, asPtr(param), ddata.size);
         reporter.apply(ReportLevel::Info, "Everything is ready.",
                        BUS_DEFSRCLOC());
         auto renderTs = Clock::now();
-        driver->doRender(dHelper.get());
+        driver->doRender(std::min(ddata.maxSPP, sdata.maxSPP), dHelper.get());
         checkCudaError(cuCtxSynchronize());
         auto endTs = Clock::now();
         {

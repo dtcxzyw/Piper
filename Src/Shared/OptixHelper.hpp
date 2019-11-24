@@ -51,7 +51,7 @@ inline T alignTo(T siz, T align) {
 }
 
 inline Buffer allocBuffer(size_t siz, size_t align = 16) {
-    align = std::max(align, 16ull);
+    align = std::max(align, 16ull);  // TODO:alignment
     CUdeviceptr ptr;
     checkCudaError(cuMemAlloc(&ptr, siz + align));
     CUdeviceptr uptr = (ptr / align + 1) * align;

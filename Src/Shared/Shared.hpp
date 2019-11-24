@@ -17,14 +17,12 @@ using Uint2 = glm::uvec2;
 using Spectrum = Vec3;
 using Uint3 = glm::uvec3;
 
-struct LightSample final {
-    Vec3 wi;
-    Spectrum rad;
-};
-
+/*
 constexpr unsigned geometryMask = 1 << 0;
 constexpr unsigned lightVolumeMask = 1 << 1;
+*/
 
+/*
 enum class BxDFType {
     Reflection = 1,
     Transmission = 2,
@@ -33,12 +31,9 @@ enum class BxDFType {
     Glossy = 16,
     All = 31
 };
+*/
 
-enum class SBTSlot : unsigned {
-    sampleOneLight,
-    initSampler,
-    userOffset
-};
+enum class SBTSlot : unsigned { sampleOneLight, initSampler, userOffset };
 
 struct LaunchParam final {
     unsigned sampleOffset, lightSbtOffset;

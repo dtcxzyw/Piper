@@ -10,6 +10,8 @@
 
 BUS_MODULE_NAME("Piper.Main");
 
+// TODO:Command usage help
+
 static int mainImpl(int argc, char** argv, Bus::ModuleSystem& sys) {
     BUS_TRACE_BEG() {
         if(argc < 2)
@@ -191,7 +193,7 @@ int main(int argc, char** argv) {
             PROCEXC();
         });
         try {
-            auto shared = fs::path(argv[0]).parent_path() / "SharedDll";
+            auto shared = fs::current_path() / "SharedDll";
             Bus::addModuleSearchPath(shared, *reporter);
             sys.wrapBuiltin([](Bus::ModuleSystem& sys) {
                 return std::make_shared<BuiltinFunction>(sys);

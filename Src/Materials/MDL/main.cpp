@@ -136,6 +136,7 @@ public:
                 samplePTX.substr(0, samplePTX.find(".address_size") + 16);
             auto kernel = samplePTX.substr(
                 samplePTX.find(".extern .const .align 8 .b8 launchParam[16]"));
+            // BUG:not support printf
             auto finalPTX = header + mdlPTX + kernel;
             // reporter().apply(ReportLevel::Debug, finalPTX, BUS_DEFSRCLOC());
             desc.callables.moduleCC = helper->loadModuleFromPTX(finalPTX);

@@ -85,7 +85,7 @@ public:
         }
         BUS_TRACE_END();
     }
-    void doRender(DriverHelper helper) override {
+    void doRender(unsigned realSPP, DriverHelper helper) override {
         BUS_TRACE_BEG() {
             DataDesc data;
             data.filtBadColor = mFiltBadColor;
@@ -98,9 +98,9 @@ public:
             checkCudaError(
                 cuMemsetD16(asPtr(output), 0, sizeof(Vec4) / 16 * filmSize));
             data.outputBuffer = static_cast<Vec4*>(output.get());
-            for(unsigned i = 0; i < mSampleCount; ++i) {
-                data.sampleIdxBeg = i * mSamplePerLaunch;
-                data.sampleIdxEnd = data.sampleIdxBeg + mSamplePerLaunch;
+            for(unsigned beg = 0; beg < realSPP; beg += mSamplePerLaunch) {
+                data.sampleIdxBeg = beg;
+                data.sampleIdxEnd = std::min(beg + mSamplePerLaunch, realSPP);
                 Buffer rayGenSBT = uploadData(
                     helper->getStream(), packSBTRecord(mRayGen.get(), data));
                 Buffer exceptionSBT = uploadData(
@@ -122,11 +122,15 @@ public:
                     table.missRecordBase = ptr;
                     table.missRecordStrideInBytes = stride;
                 });
-                std::stringstream ss;
-                ss.precision(2);
-                ss << std::fixed << "Process:" << (i + 1) * 100.0 / mSampleCount
-                   << "%" << std::endl;
-                reporter().apply(ReportLevel::Info, ss.str(), BUS_DEFSRCLOC());
+                {
+                    std::stringstream ss;
+                    ss.precision(2);
+                    ss << std::fixed
+                       << "Process:" << data.sampleIdxEnd * 100.0 / realSPP
+                       << "%" << std::endl;
+                    reporter().apply(ReportLevel::Info, ss.str(),
+                                     BUS_DEFSRCLOC());
+                }
             }
             {
                 checkCudaError(cuStreamSynchronize(helper->getStream()));

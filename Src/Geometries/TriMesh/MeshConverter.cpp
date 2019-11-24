@@ -93,6 +93,19 @@ int cast(int argc, char** argv, Bus::Reporter& reporter) {
         write(data, &vertSize);
         write(data, &flag);
         write(data, mesh->mVertices, vertSize);
+        Vec3 maxp(-1e20f), minp(1e20f);
+        for(uint32_t i = 0; i < vertSize; ++i) {
+            Vec3 cur = *reinterpret_cast<Vec3*>(mesh->mVertices + i);
+            maxp = glm::max(maxp, cur);
+            minp = glm::min(minp, cur);
+        }
+        {
+            std::stringstream ss;
+            ss << "Bound: [" << minp.x << "," << minp.y << "," << minp.z
+               << "]-[" << maxp.x << "," << maxp.y << "," << maxp.z << "]"
+               << std::endl;
+            reporter.apply(ReportLevel::Info, ss.str(), BUS_DEFSRCLOC());
+        }
         if(mesh->HasNormals())
             write(data, mesh->mNormals, vertSize);
         if(mesh->HasTextureCoords(0)) {

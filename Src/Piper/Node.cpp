@@ -8,6 +8,7 @@
 
 BUS_MODULE_NAME("Piper.BuiltinGeometry.Node");
 
+// BUG:illegal memory access
 class Node final : public Geometry {
 private:
     std::vector<std::shared_ptr<Geometry>> mChildren;

@@ -35,3 +35,5 @@ DEVICE void __continuation_callable__sample(Payload* payload, Vec3 dir,
             ls.rad * (lr.f(wo, wi) + mr.f(wo, wi)) * (absCosTheta(wi) / lpdf);
     payload->hit = true;
 }
+
+void check(BuiltinMaterialSampleFunction = __continuation_callable__sample);

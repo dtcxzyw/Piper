@@ -20,9 +20,8 @@ public:
         BUS_TRACE_BEG() {
             DirLight data;
             data.lum = cfg->attribute("Lum")->asVec3();
-            data.direction =
-                glm::normalize(cfg->attribute("Direction")->asVec3());
-            data.distance = cfg->attribute("Distance")->asFloat();
+            data.negDir =
+                glm::normalize(-cfg->attribute("Direction")->asVec3());
             OptixModule mod = helper->loadModuleFromFile(
                 modulePath().parent_path() / "DirLight.ptx");
             OptixProgramGroupDesc desc = {};

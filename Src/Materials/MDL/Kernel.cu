@@ -1036,3 +1036,5 @@ DEVICE void __continuation_callable__sample(Payload* payload, Vec3 dir,
         // TODO:light importance sampling
     }
 }
+
+void check(BuiltinMaterialSampleFunction = __continuation_callable__sample);

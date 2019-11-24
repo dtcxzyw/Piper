@@ -3,6 +3,8 @@
 
 BUS_MODULE_NAME("Piper.Builtin.CameraAdapter");
 
+// TODO: Fill and Overscan mode
+// https://www.scratchapixel.com/lessons/3d-basic-rendering/3d-viewing-pinhole-camera/how-pinhole-camera-works-part-2
 class CameraAdapter final : public Photographer {
 private:
     std::shared_ptr<Camera> mImpl;

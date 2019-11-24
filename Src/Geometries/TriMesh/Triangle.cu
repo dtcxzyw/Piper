@@ -28,9 +28,10 @@ GLOBAL void __closesthit__RCH() {
 
     Vec3 ori = f2v(optixGetWorldRayOrigin());
     Vec3 dir = f2v(optixGetWorldRayDirection());
-    Vec3 hit = ori + optixGetRayTmin() * dir;
+    Vec3 hit = ori + optixGetRayTmax() * dir;
     builtinMaterialSample(data->material, payload, dir, hit, ng, ns, texCoord,
                           optixGetRayTime(), front);
 }
 
+// TODO:cut-out
 GLOBAL void __anyhit__OAH() {}

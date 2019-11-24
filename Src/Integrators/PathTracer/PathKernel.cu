@@ -5,7 +5,7 @@ DEVICE Spectrum __continuation_callable__traceKernel(RaySample ray,
                                                      SamplerContext* sampler) {
     Spectrum res{ 0.0f };
     auto data = getSBTData<DataDesc>();
-    Payload payload;      
+    Payload payload;
     payload.sampler = sampler;
     uint32_t p0, p1;
     packPointer(&payload, p0, p1);
@@ -14,6 +14,7 @@ DEVICE Spectrum __continuation_callable__traceKernel(RaySample ray,
         payload.hit = false;
         payload.f = Spectrum{ 0.0f };
         payload.rad = Spectrum{ 0.0f };
+        // TODO:rayTime
         optixTrace(launchParam.root, v2f(ray.ori), v2f(ray.dir), eps, 1e20f,
                    0.0f, 255, OPTIX_RAY_FLAG_NONE, radianceOffset,
                    traceSBTStride, radianceMiss, p0, p1);

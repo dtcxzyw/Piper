@@ -12,7 +12,8 @@ DEVICE LightSample __continuation_callable__sample(const Vec3& pos,
     }
     unsigned id = static_cast<unsigned>(num * sampler());
     id = glm::clamp(id, 0U, num - 1U);
-    return optixContinuationCall<LightSample, const Vec3&, float,
-                                 SamplerContext&>(
-        launchParam.lightSbtOffset + id, pos, rayTime, sampler);
+    return sampleOneLightImpl(launchParam.lightSbtOffset + id, pos, rayTime,
+                              sampler);
 }
+
+void check(LightSampleFunction = __continuation_callable__sample);

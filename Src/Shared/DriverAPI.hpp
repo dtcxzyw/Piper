@@ -28,5 +28,5 @@ public:
 
     virtual DriverData init(PluginHelper helper,
                             std::shared_ptr<Config> config) = 0;
-    virtual void doRender(DriverHelper helper) = 0;
+    virtual void doRender(unsigned realSPP, DriverHelper helper) = 0;
 };

@@ -35,7 +35,8 @@ struct SamplerInitResult final {
     float px, py;
 };
 
-using SamplerInitFunction = SamplerInitResult (*)(unsigned, unsigned, unsigned);
+using SamplerInitFunction = SamplerInitResult (*)(unsigned i, unsigned x,
+                                                  unsigned y);
 
 INLINEDEVICE SamplerInitResult initSampler(unsigned i, unsigned x, unsigned y) {
     return optixDirectCall<SamplerInitResult, unsigned, unsigned>(
@@ -46,7 +47,8 @@ struct RaySample final {
     Vec3 ori, dir;
 };
 
-using RayGenerateFunction = RaySample (*)(float, float, SamplerContext&);
+using RayGenerateFunction = RaySample (*)(float px, float py,
+                                          SamplerContext& sampler);
 
 INLINEDEVICE RaySample generateRay(unsigned id, float px, float py,
                                    SamplerContext& sampler) {
@@ -54,7 +56,8 @@ INLINEDEVICE RaySample generateRay(unsigned id, float px, float py,
                                                                      sampler);
 }
 
-using PixelSampleFunction = Spectrum (*)(RaySample, SamplerContext*);
+using PixelSampleFunction = Spectrum (*)(RaySample ray,
+                                         SamplerContext* sampler);
 
 INLINEDEVICE Spectrum sampleOnePixel(unsigned id, RaySample ray,
                                      SamplerContext* sampler) {
@@ -62,11 +65,26 @@ INLINEDEVICE Spectrum sampleOnePixel(unsigned id, RaySample ray,
                                                                        sampler);
 }
 
+struct LightSample final {
+    Vec3 wi;
+    Spectrum rad;
+};
+
+using LightSampleFunction = LightSample (*)(const Vec3& pos, float rayTime,
+                                            SamplerContext& sampler);
+
 INLINEDEVICE LightSample sampleOneLight(const Vec3& pos, float rayTime,
                                         SamplerContext& sampler) {
     return optixContinuationCall<LightSample, const Vec3&, float,
                                  SamplerContext&>(
         static_cast<unsigned>(SBTSlot::sampleOneLight), pos, rayTime, sampler);
+}
+
+INLINEDEVICE LightSample sampleOneLightImpl(unsigned id, const Vec3& pos,
+                                            float rayTime,
+                                            SamplerContext& sampler) {
+    return optixContinuationCall<LightSample, const Vec3&, float,
+                                 SamplerContext&>(id, pos, rayTime, sampler);
 }
 
 INLINEDEVICE float3 v2f(const Vec3& v) {
@@ -188,6 +206,11 @@ template <typename T>
 INLINEDEVICE const T* getSBTData() {
     return reinterpret_cast<T*>(optixGetSbtDataPointer());
 }
+
+using BuiltinMaterialSampleFunction = void (*)(Payload* payload, Vec3 dir,
+                                               Vec3 hit, Vec3 ng, Vec3 ns,
+                                               Vec2 texCoord, float rayTime,
+                                               bool front);
 
 INLINEDEVICE void builtinMaterialSample(unsigned id, Payload* payload, Vec3 dir,
                                         Vec3 hit, Vec3 ng, Vec3 ns,

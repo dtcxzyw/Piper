@@ -148,7 +148,7 @@ public:
             if(sbtID != 0) {
                 OptixInstance inst = {};
                 // TODO:mask
-                inst.visibilityMask = geometryMask;
+                inst.visibilityMask = 255;
                 inst.instanceId = 0;
                 inst.flags = OPTIX_INSTANCE_FLAG_DISABLE_TRANSFORM;
                 inst.sbtOffset = sbtID * 2;
