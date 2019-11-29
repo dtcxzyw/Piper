@@ -19,6 +19,7 @@ struct TriMeshAccelData final {
     OptixTraversableHandle handle;
     OptixProgramGroup radGroup, occGroup;
     DataDesc accelData;
+    OptixAabb aabb;
 };
 
 class TriMeshAccel final : public Asset {
@@ -67,10 +68,9 @@ public:
 
             OptixAccelBuildOptions opt = {};
             opt.operation = OPTIX_BUILD_OPERATION_BUILD;
-            opt.buildFlags = OPTIX_BUILD_FLAG_NONE;
+            opt.buildFlags = OPTIX_BUILD_FLAG_ALLOW_COMPACTION |
+                OPTIX_BUILD_FLAG_PREFER_FAST_TRACE;
             opt.motionOptions.numKeys = 1;
-            opt.motionOptions.flags = OPTIX_MOTION_FLAG_NONE;
-            opt.motionOptions.timeBegin = opt.motionOptions.timeEnd = 0.0f;
 
             OptixBuildInput input = {};
             input.type = OPTIX_BUILD_INPUT_TYPE_TRIANGLES;
@@ -101,15 +101,31 @@ public:
 
             Buffer tmp = allocBuffer(siz.tempSizeInBytes,
                                      OPTIX_ACCEL_BUFFER_BYTE_ALIGNMENT);
-            mAccel = allocBuffer(siz.outputSizeInBytes,
-                                 OPTIX_ACCEL_BUFFER_BYTE_ALIGNMENT);
+            Buffer ucAccel = allocBuffer(siz.outputSizeInBytes,
+                                         OPTIX_ACCEL_BUFFER_BYTE_ALIGNMENT);
+            OptixAccelEmitDesc emit[2];
+            emit[0].type = OPTIX_PROPERTY_TYPE_AABBS;
+            Buffer aabb = allocBuffer(sizeof(OptixAabb));
+            emit[0].result = asPtr(aabb);
 
-            checkOptixError(optixAccelBuild(
-                helper->getContext(), stream, &opt, &input, 1, asPtr(tmp),
-                siz.tempSizeInBytes, asPtr(mAccel), siz.outputSizeInBytes,
-                &mData.handle, nullptr, 0));
+            emit[1].type = OPTIX_PROPERTY_TYPE_COMPACTED_SIZE;
+            Buffer csizd = allocBuffer(sizeof(uint64_t));
+            emit[1].result = asPtr(csizd);
+
+            OptixTraversableHandle ucHandle;
+            checkOptixError(
+                optixAccelBuild(helper->getContext(), stream, &opt, &input, 1,
+                                asPtr(tmp), siz.tempSizeInBytes, asPtr(ucAccel),
+                                siz.outputSizeInBytes, &ucHandle, emit, 2));
             checkCudaError(cuStreamSynchronize(stream));
-            // TODO:Accel Compaction
+            // TODO:use stream
+            mData.aabb = downloadData<OptixAabb>(aabb, 0);
+            uint64_t csiz = downloadData<uint64_t>(csizd, 0);
+            mAccel = allocBuffer(csiz, OPTIX_ACCEL_BUFFER_BYTE_ALIGNMENT);
+            checkOptixError(optixAccelCompact(helper->getContext(), stream,
+                                              ucHandle, asPtr(mAccel), csiz,
+                                              &mData.handle));
+            checkCudaError(cuStreamSynchronize(stream));
         }
         BUS_TRACE_END();
     }
@@ -135,7 +151,6 @@ public:
                 config->attribute("Material"));
             TriMeshAccelData accelData = mAccel->getData();
             DataDesc data = accelData.accelData;
-            mData.handle = accelData.handle;
             MaterialData matData = mMat->getData();
             data.material = helper->addCallable(matData.group, matData.radData);
             mData.maxSampleDim = matData.maxSampleDim;
@@ -145,45 +160,45 @@ public:
                 accelData.occGroup, packSBTRecord(accelData.occGroup, data));
 
             // TODO:Transform
-            if(sbtID != 0) {
-                OptixInstance inst = {};
-                // TODO:mask
-                inst.visibilityMask = 255;
-                inst.instanceId = 0;
-                inst.flags = OPTIX_INSTANCE_FLAG_DISABLE_TRANSFORM;
-                inst.sbtOffset = sbtID * 2;
-                inst.traversableHandle = accelData.handle;
-                // TODO:Disable transform???
-                *reinterpret_cast<glm::mat3x4*>(inst.transform) =
-                    glm::identity<Mat4>();
-                mInstance =
-                    uploadData(0, &inst, 1, OPTIX_INSTANCE_BYTE_ALIGNMENT);
+            // if(sbtID != 0) {
+            OptixInstance inst = {};
+            // TODO:mask
+            inst.visibilityMask = 255;
+            inst.instanceId = 0;
+            // inst.flags = OPTIX_INSTANCE_FLAG_DISABLE_TRANSFORM;
+            inst.flags = OPTIX_INSTANCE_FLAG_NONE;
+            inst.sbtOffset = sbtID * 2;
+            inst.traversableHandle = accelData.handle;
+            // TODO:Disable transform???
+            *reinterpret_cast<glm::mat3x4*>(inst.transform) =
+                glm::identity<Mat4>();
+            mInstance = uploadData(0, &inst, 1, OPTIX_INSTANCE_BYTE_ALIGNMENT);
 
-                OptixBuildInput input = {};
-                input.type = OPTIX_BUILD_INPUT_TYPE_INSTANCES;
-                auto& instInput = input.instanceArray;
-                instInput.aabbs = instInput.numAabbs = 0;
-                instInput.numInstances = 1;
-                instInput.instances = asPtr(mInstance);
+            OptixBuildInput input = {};
+            input.type = OPTIX_BUILD_INPUT_TYPE_INSTANCES;
+            auto& instInput = input.instanceArray;
+            instInput.aabbs = instInput.numAabbs = 0;
+            instInput.numInstances = 1;
+            instInput.instances = asPtr(mInstance);
 
-                OptixAccelBuildOptions opt = {};
-                opt.operation = OPTIX_BUILD_OPERATION_BUILD;
+            OptixAccelBuildOptions opt = {};
+            opt.operation = OPTIX_BUILD_OPERATION_BUILD;
+            opt.motionOptions.numKeys = 1;
 
-                OptixAccelBufferSizes size;
+            OptixAccelBufferSizes size;
 
-                checkOptixError(optixAccelComputeMemoryUsage(
-                    helper->getContext(), &opt, &input, 1, &size));
+            checkOptixError(optixAccelComputeMemoryUsage(
+                helper->getContext(), &opt, &input, 1, &size));
 
-                Buffer tmp = allocBuffer(size.tempSizeInBytes,
-                                         OPTIX_ACCEL_BUFFER_BYTE_ALIGNMENT);
-                mAccelBuffer = allocBuffer(size.outputSizeInBytes,
-                                           OPTIX_ACCEL_BUFFER_BYTE_ALIGNMENT);
-                checkOptixError(optixAccelBuild(
-                    helper->getContext(), 0, &opt, &input, 1, asPtr(tmp),
-                    size.tempSizeInBytes, asPtr(mAccelBuffer),
-                    size.outputSizeInBytes, &mData.handle, nullptr, 0));
-                checkCudaError(cuStreamSynchronize(0));
-            }
+            Buffer tmp = allocBuffer(size.tempSizeInBytes,
+                                     OPTIX_ACCEL_BUFFER_BYTE_ALIGNMENT);
+            mAccelBuffer = allocBuffer(size.outputSizeInBytes,
+                                       OPTIX_ACCEL_BUFFER_BYTE_ALIGNMENT);
+            checkOptixError(optixAccelBuild(
+                helper->getContext(), 0, &opt, &input, 1, asPtr(tmp),
+                size.tempSizeInBytes, asPtr(mAccelBuffer),
+                size.outputSizeInBytes, &mData.handle, nullptr, 0));
+            checkCudaError(cuStreamSynchronize(0));
         }
         BUS_TRACE_END();
     }

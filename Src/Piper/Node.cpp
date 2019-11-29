@@ -8,7 +8,6 @@
 
 BUS_MODULE_NAME("Piper.BuiltinGeometry.Node");
 
-// BUG:illegal memory access
 class Node final : public Geometry {
 private:
     std::vector<std::shared_ptr<Geometry>> mChildren;
@@ -43,10 +42,10 @@ public:
                 mData.handle = 0;
             } else {
                 std::vector<OptixInstance> insts;
-                // TODO:mask
                 for(auto&& child : mChildren) {
                     // TODO:instance description from child
                     OptixInstance inst = {};
+                    // TODO:mask
                     inst.visibilityMask = 255;
                     inst.instanceId = 0;
                     // TODO:Disable transform
@@ -69,6 +68,7 @@ public:
 
                 OptixAccelBuildOptions opt = {};
                 opt.operation = OPTIX_BUILD_OPERATION_BUILD;
+                opt.motionOptions.numKeys = 1;
 
                 OptixAccelBufferSizes size;
 

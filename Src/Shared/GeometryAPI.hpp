@@ -4,6 +4,7 @@
 struct GeometryData final {
     unsigned maxSampleDim;
     OptixTraversableHandle handle;
+    OptixAabb aabb;
 };
 
 class Geometry : public Asset {

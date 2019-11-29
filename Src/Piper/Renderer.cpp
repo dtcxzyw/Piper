@@ -10,6 +10,7 @@
 #pragma warning(push, 0)
 #define NOMINMAX
 #include <optix_function_table_definition.h>
+#include <optix_stack_size.h>
 #include <optix_stubs.h>
 #pragma warning(pop)
 
@@ -288,7 +289,17 @@ void renderImpl(std::shared_ptr<Config> config, const fs::path& scenePath,
                                 nullptr, nullptr, &pipe));
         Pipeline pipeline{ pipe };
 
-        // TODO:optixPipelineSetStackSize
+        // TODO: set stack size
+        {
+            OptixStackSizes ssiz = {};
+            for(auto group : groups) {
+                checkOptixError(optixUtilAccumulateStackSizes(group, &ssiz));
+            }
+            unsigned dct, dcs, cc;
+            checkOptixError(
+                optixUtilComputeStackSizes(&ssiz, 2, 16, 16, &dct, &dcs, &cc));
+            checkOptixError(optixPipelineSetStackSize(pipe, dct, dcs, cc, 10));
+        }
 
         LaunchParam launchParam;
         launchParam.sampleOffset = static_cast<unsigned>(SBTSlot::userOffset) +

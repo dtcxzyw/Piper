@@ -28,11 +28,6 @@ GLOBAL void __miss__occ() {
     optixSetPayload_0(1);
 }
 GLOBAL void __exception__default() {
-    int code = optixGetExceptionCode();
-    if(code == OPTIX_EXCEPTION_CODE_TRAVERSAL_INVALID_HIT_SBT)
-        printf("Invalid hit sbt idx=%d,off=%d\n",
-               optixGetExceptionInvalidSbtOffset(), optixGetPrimitiveIndex());
-    else
-        printf("exception %d\n", code);
+    optix_impl::optixDumpExceptionDetails();
 }
 GLOBAL void __exception__silence() {}

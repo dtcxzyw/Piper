@@ -173,6 +173,7 @@ public:
     }
 };
 
+// TODO:set ILogger
 class Instance final : public Bus::ModuleInstance {
 private:
     HMODULE mHandle;

@@ -109,6 +109,13 @@ inline std::vector<T> downloadData(const Buffer& buf, size_t offsetByte,
     return res;
 }
 
+template <typename T>
+inline T downloadData(const Buffer& buf, size_t offsetByte) {
+    T res = {};
+    checkCudaError(cuMemcpyDtoH(&res, asPtr(buf) + offsetByte, sizeof(T)));
+    return res;
+}
+
 struct ProgramGroupDeleter final {
     void operator()(OptixProgramGroup mod) const {
         checkOptixError(optixProgramGroupDestroy(mod));
