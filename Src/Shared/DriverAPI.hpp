@@ -12,8 +12,14 @@ using DriverHelper = DriverHelperAPI*;
 
 struct DriverData final {
     std::vector<OptixProgramGroup> group;
-    unsigned maxSampleDim, maxTraceDepth, maxSPP;
+    unsigned maxSampleDim, maxTraceDepth, maxSPP, dss, cssRG, cssMSRad,
+        cssMSOcc;
     Uint2 size;
+};
+
+struct StackSizeInfo final {
+    unsigned maxDssT, maxDssS, cssRG, cssMSRad, cssMSOcc, maxCssGeoRad,
+        maxCssGeoOcc, maxCssLight, graphHeight;
 };
 
 class Driver : public Bus::ModuleFunctionBase {
@@ -28,5 +34,7 @@ public:
 
     virtual DriverData init(PluginHelper helper,
                             std::shared_ptr<Config> config) = 0;
+    virtual void setStack(OptixPipeline pipeline,
+                          const StackSizeInfo& stack) = 0;
     virtual void doRender(unsigned realSPP, DriverHelper helper) = 0;
 };

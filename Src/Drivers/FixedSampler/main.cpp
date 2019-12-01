@@ -63,18 +63,32 @@ public:
             mException.reset(groups[1]);
             mMissRad.reset(groups[2]);
             mMissOcc.reset(groups[3]);
+
+            DriverData res;
+            OptixStackSizes size;
+            checkOptixError(
+                optixProgramGroupGetStackSize(mRayGen.get(), &size));
+            res.cssRG = size.cssRG;
+            checkOptixError(
+                optixProgramGroupGetStackSize(mMissRad.get(), &size));
+            res.cssMSRad = size.cssMS;
+            checkOptixError(
+                optixProgramGroupGetStackSize(mMissOcc.get(), &size));
+            res.cssMSOcc = size.cssMS;
             auto pgc = config->attribute("Photographer");
             mPhotographer = system().instantiateByName<Photographer>(
                 pgc->attribute("Plugin")->asString());
             CameraData cdata = mPhotographer->init(helper, pgc);
+            res.dss = cdata.dss;
             mGenerateRay = helper->addCallable(
                 cdata.group, mPhotographer->prepareFrame(mFilmSize));
             auto igc = config->attribute("Integrator");
             mIntegrator = system().instantiateByName<Integrator>(
                 igc->attribute("Plugin")->asString());
             IntegratorData idata = mIntegrator->init(helper, igc);
+            res.cssRG += idata.css;
+            res.dss = std::max(res.dss, idata.dss);
             mSampleOnePixel = helper->addCallable(idata.group, idata.sbtData);
-            DriverData res;
             res.maxTraceDepth = idata.maxTraceDepth;
             res.maxSampleDim = cdata.maxSampleDim + idata.maxSampleDim;
             res.group.assign(groups, groups + 4);
@@ -82,6 +96,21 @@ public:
             res.maxSPP = mSampleCount * mSamplePerLaunch;
             // TODO:own Sampler
             return res;
+        }
+        BUS_TRACE_END();
+    }
+    void setStack(OptixPipeline pipeline, const StackSizeInfo& stack) override {
+        BUS_TRACE_BEG() {
+            // TODO:other algorithms
+            unsigned css = stack.cssRG +
+                std::max(stack.maxCssGeoRad + stack.maxCssLight +
+                             std::max(stack.maxCssGeoOcc, stack.cssMSOcc),
+                         stack.cssMSRad);
+            reporter().apply(ReportLevel::Info, "css = " + std::to_string(css),
+                             BUS_DEFSRCLOC());
+            checkOptixError(optixPipelineSetStackSize(pipeline, stack.maxDssT,
+                                                      stack.maxDssS, css,
+                                                      stack.graphHeight));
         }
         BUS_TRACE_END();
     }

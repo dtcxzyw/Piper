@@ -36,7 +36,10 @@ public:
             mGroup.reset(group);
             CameraData res;
             res.maxSampleDim = 2U;
-            res.group = mGroup.get();
+            res.group = group;
+            OptixStackSizes size;
+            checkOptixError(optixProgramGroupGetStackSize(group, &size));
+            res.dss = size.dssDC;
             return res;
         }
         BUS_TRACE_END();

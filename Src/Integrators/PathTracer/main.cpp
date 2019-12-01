@@ -38,6 +38,10 @@ public:
             res.maxSampleDim = 0;
             res.maxTraceDepth = data.maxDepth;
             res.group = mGroup.get();
+            OptixStackSizes size;
+            checkOptixError(optixProgramGroupGetStackSize(group, &size));
+            res.css = size.cssCC;
+            res.dss = 0;
             return res;
         }
         BUS_TRACE_END();

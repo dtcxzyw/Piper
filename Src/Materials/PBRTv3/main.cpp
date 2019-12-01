@@ -3,6 +3,7 @@
 #include "../../Shared/TextureSamplerAPI.hpp"
 #include "DataDesc.hpp"
 #pragma warning(push, 0)
+#define NOMINMAX
 #include <optix_function_table_definition.h>
 #include <optix_stubs.h>
 #pragma warning(pop)
@@ -10,13 +11,15 @@
 BUS_MODULE_NAME("Piper.BuiltinMaterial.PBRTv3");
 
 unsigned loadTexture(std::shared_ptr<Config> cfg, PluginHelper helper,
-                     const char* name, std::shared_ptr<TextureSampler>& inst) {
+                     const char* name, std::shared_ptr<TextureSampler>& inst,
+                     unsigned& dss) {
     BUS_TRACE_BEG() {
         if(!cfg->hasAttr(name))
             return 0;
         cfg = cfg->attribute(name);
         inst = helper->instantiateAsset<TextureSampler>(cfg);
         TextureSamplerData data = inst->getData();
+        dss = std::max(dss, data.dss);
         return helper->addCallable(data.group, data.sbtData);
     }
     BUS_TRACE_END();
@@ -32,11 +35,12 @@ public:
     explicit Plastic(Bus::ModuleInstance& instance) : Material(instance) {}
     void init(PluginHelper helper, std::shared_ptr<Config> config) override {
         BUS_TRACE_BEG() {
+            mData.dss = 0;
             PlasticData data;
-            data.kd = loadTexture(config, helper, "Diffuse", mKd);
-            data.ks = loadTexture(config, helper, "Specular", mKs);
+            data.kd = loadTexture(config, helper, "Diffuse", mKd, mData.dss);
+            data.ks = loadTexture(config, helper, "Specular", mKs, mData.dss);
             data.roughness =
-                loadTexture(config, helper, "Roughness", mRoughness);
+                loadTexture(config, helper, "Roughness", mRoughness, mData.dss);
             OptixModule mod = helper->loadModuleFromFile(
                 modulePath().parent_path() / "Plastic.ptx");
             OptixProgramGroupDesc desc = {};
@@ -54,6 +58,9 @@ public:
             mData.group = group;
             mData.maxSampleDim = 3;
             mData.radData = packSBTRecord(group, data);
+            OptixStackSizes size;
+            checkOptixError(optixProgramGroupGetStackSize(group, &size));
+            mData.css = size.cssCC;
         }
         BUS_TRACE_END();
     }

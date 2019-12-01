@@ -7,6 +7,7 @@
 #include "../Shared/LightSamplerAPI.hpp"
 #include "../Shared/SamplerAPI.hpp"
 #include <chrono>
+#include <sstream>
 #pragma warning(push, 0)
 #define NOMINMAX
 #include <optix_function_table_definition.h>
@@ -189,12 +190,9 @@ void renderImpl(std::shared_ptr<Config> config, const fs::path& scenePath,
         auto global = config->attribute("Core");
         Context context = createContext(ctx.get(), sys.getReporter(), global);
         bool debug = global->attribute("Debug")->asBool();
-        // BUG:debug mode->exception -3
-        /*
         if(!debug) {
             checkCudaError(cuCtxSetLimit(CU_LIMIT_PRINTF_FIFO_SIZE, 0));
         }
-        */
 
         OptixModuleCompileOptions MCO = {};
         MCO.debugLevel = (debug ? OPTIX_COMPILE_DEBUG_LEVEL_FULL :
@@ -237,6 +235,7 @@ void renderImpl(std::shared_ptr<Config> config, const fs::path& scenePath,
         };
         std::shared_ptr<Geometry> root = sys.instantiate<Geometry>(nodeClass);
         root->init(helper.get(), config->attribute("Scene"));
+        GeometryData gdata = root->getData();
 
         unsigned msdL = 0;
         for(auto&& light : lights) {
@@ -252,6 +251,7 @@ void renderImpl(std::shared_ptr<Config> config, const fs::path& scenePath,
                              sys, lights.size(), lsdata);
         groups.insert(lsdata.group);
 
+        // TODO:for other algorithms
         unsigned msdPerTrace =
             root->getData().maxSampleDim + msdL + lsdata.maxSampleDim;
         unsigned msd = ddata.maxSampleDim + ddata.maxTraceDepth * msdPerTrace;
@@ -289,23 +289,57 @@ void renderImpl(std::shared_ptr<Config> config, const fs::path& scenePath,
                                 nullptr, nullptr, &pipe));
         Pipeline pipeline{ pipe };
 
-        // TODO: set stack size
         {
-            OptixStackSizes ssiz = {};
-            for(auto group : groups) {
-                checkOptixError(optixUtilAccumulateStackSizes(group, &ssiz));
+            StackSizeInfo stack = {};
+            // Driver
+            stack.cssMSOcc = ddata.cssMSOcc;
+            stack.cssMSRad = ddata.cssMSRad;
+            stack.cssRG = ddata.cssRG;
+            stack.maxDssS = ddata.dss;
+            // Scene
+            stack.graphHeight = gdata.graphHeight;
+            stack.maxCssGeoOcc = gdata.cssOcc;
+            stack.maxCssGeoRad = gdata.cssRad;
+            stack.maxDssT = std::max(stack.maxDssT, gdata.dssT);
+            stack.maxDssS = std::max(stack.maxDssS, gdata.dssS);
+            // Light
+            stack.maxCssLight = 0;
+            for(auto&& light : lights) {
+                auto data = light->getData();
+                stack.maxDssS = std::max(stack.maxDssS, data.dss);
+                stack.maxCssLight = std::max(stack.maxCssLight, data.css);
             }
-            unsigned dct, dcs, cc;
-            checkOptixError(
-                optixUtilComputeStackSizes(&ssiz, 2, 16, 16, &dct, &dcs, &cc));
-            checkOptixError(optixPipelineSetStackSize(pipe, dct, dcs, cc, 10));
+            // LightSampler
+            stack.maxCssLight += lsdata.css;
+            stack.maxDssS = std::max(stack.maxDssS, lsdata.dss);
+            // Sampler
+            stack.maxDssS =
+                std::max(stack.maxDssS + sdata.dssSample, sdata.dssInit);
+            // Warning:don't use sampler in AH and IS program.
+            {
+                std::stringstream ss;
+                ss << "Stack usage:" << std::endl;
+#define OUTPUT(element) ss << #element " = " << element << std::endl
+                OUTPUT(stack.cssMSOcc);
+                OUTPUT(stack.cssMSRad);
+                OUTPUT(stack.cssRG);
+                OUTPUT(stack.graphHeight);
+                OUTPUT(stack.maxCssGeoOcc);
+                OUTPUT(stack.maxCssGeoRad);
+                OUTPUT(stack.maxCssLight);
+                OUTPUT(stack.maxDssS);
+                OUTPUT(stack.maxDssT);
+#undef OUTPUT
+                reporter.apply(ReportLevel::Info, ss.str(), BUS_DEFSRCLOC());
+            }
+            driver->setStack(pipe, stack);
         }
 
         LaunchParam launchParam;
         launchParam.sampleOffset = static_cast<unsigned>(SBTSlot::userOffset) +
             static_cast<unsigned>(callableData.size());
         launchParam.lightSbtOffset = launchParam.sampleOffset + msd;
-        launchParam.root = root->getData().handle;
+        launchParam.root = gdata.handle;
 
         OptixShaderBindingTable sbt = {};
         Buffer hgBuf = uploadSBTRecords(0, hitGroupData, sbt.hitgroupRecordBase,

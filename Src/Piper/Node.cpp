@@ -20,8 +20,9 @@ public:
         BUS_TRACE_BEG() {
             SRT transform = cfg->getTransform("Transform");
             // TODO:pass transform to light
-            mData.maxSampleDim = 0;
+            mData = {};
             auto children = cfg->attribute("Children");
+            unsigned maxH = 0;
             for(auto&& child : children->expand()) {
                 auto type = child->attribute("NodeType")->asString();
                 if(type == "Light") {
@@ -32,6 +33,11 @@ public:
                     GeometryData data = geo->getData();
                     mData.maxSampleDim =
                         std::max(mData.maxSampleDim, data.maxSampleDim);
+                    mData.dssS = std::max(mData.dssS, data.dssS);
+                    mData.dssT = std::max(mData.dssT, data.dssT);
+                    mData.cssOcc = std::max(mData.cssOcc, data.cssOcc);
+                    mData.cssRad = std::max(mData.cssRad, data.cssRad);
+                    maxH = std::max(maxH, data.graphHeight);
                     mChildren.push_back(geo);
                 } else {
                     BUS_TRACE_THROW(std::logic_error(
@@ -39,7 +45,7 @@ public:
                 }
             }
             if(mChildren.empty()) {
-                mData.handle = 0;
+                mData.handle = mData.graphHeight = 0;
             } else {
                 std::vector<OptixInstance> insts;
                 for(auto&& child : mChildren) {
@@ -84,6 +90,7 @@ public:
                     size.tempSizeInBytes, asPtr(mAccelBuffer),
                     size.outputSizeInBytes, &mData.handle, nullptr, 0));
                 checkCudaError(cuStreamSynchronize(0));
+                mData.graphHeight = maxH + 1;
             }
         }
         BUS_TRACE_END();

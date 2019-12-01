@@ -38,6 +38,10 @@ public:
             mData.sbtData = packSBTRecord(mProgramGroup.get(), data);
             mData.maxSampleDim = 0;
             mData.group = mProgramGroup.get();
+            OptixStackSizes size;
+            checkOptixError(optixProgramGroupGetStackSize(group, &size));
+            mData.css = size.cssCC;
+            mData.dss = 0;
         }
         BUS_TRACE_END();
     }

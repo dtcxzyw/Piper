@@ -3,7 +3,7 @@
 
 struct MaterialData final {
     Data radData;
-    unsigned maxSampleDim;
+    unsigned maxSampleDim, css, dss;
     OptixProgramGroup group;
 };
 

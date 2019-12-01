@@ -165,6 +165,10 @@ public:
             mData.group = group;
             mData.maxSampleDim = 3;
             mData.radData = packSBTRecord(group, data);
+            mData.dss = 0;
+            OptixStackSizes size;
+            checkOptixError(optixProgramGroupGetStackSize(group, &size));
+            mData.css = size.cssCC;
         }
         BUS_TRACE_END();
     }

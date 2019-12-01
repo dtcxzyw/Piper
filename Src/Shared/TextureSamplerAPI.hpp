@@ -4,6 +4,7 @@
 struct TextureSamplerData final {
     Data sbtData;
     OptixProgramGroup group;
+    unsigned dss;
 };
 
 class TextureSampler : public Asset {

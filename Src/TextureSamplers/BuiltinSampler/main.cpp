@@ -35,6 +35,9 @@ public:
             mProgramGroup.reset(group);
             mData.sbtData = packSBTRecord(group, data);
             mData.group = group;
+            OptixStackSizes size;
+            checkOptixError(optixProgramGroupGetStackSize(group, &size));
+            mData.dss = size.dssDC;
         }
         BUS_TRACE_END();
     }

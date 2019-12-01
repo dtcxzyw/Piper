@@ -4,6 +4,7 @@
 #include "DataDesc.hpp"
 #include "MeshAPI.hpp"
 #pragma warning(push, 0)
+#define NOMINMAX
 #include <optix_function_table_definition.h>
 #include <optix_stubs.h>
 #pragma warning(pop)
@@ -20,6 +21,7 @@ struct TriMeshAccelData final {
     OptixProgramGroup radGroup, occGroup;
     DataDesc accelData;
     OptixAabb aabb;
+    unsigned cssRad, cssOcc;
 };
 
 class TriMeshAccel final : public Asset {
@@ -63,6 +65,15 @@ public:
             mOccGroup.reset(group[1]);
             mData.radGroup = mRadGroup.get();
             mData.occGroup = mOccGroup.get();
+            OptixStackSizes size;
+            checkOptixError(
+                optixProgramGroupGetStackSize(mData.radGroup, &size));
+            mData.cssRad =
+                std::max(size.cssAH, std::max(size.cssCH, size.cssIS));
+            checkOptixError(
+                optixProgramGroupGetStackSize(mData.occGroup, &size));
+            mData.cssOcc =
+                std::max(size.cssAH, std::max(size.cssCH, size.cssIS));
 
             CUstream stream = 0;
 
@@ -160,7 +171,7 @@ public:
                 accelData.occGroup, packSBTRecord(accelData.occGroup, data));
 
             // TODO:Transform
-            // if(sbtID != 0) {
+            // if(sbtID != 0)
             OptixInstance inst = {};
             // TODO:mask
             inst.visibilityMask = 255;
@@ -199,6 +210,12 @@ public:
                 size.tempSizeInBytes, asPtr(mAccelBuffer),
                 size.outputSizeInBytes, &mData.handle, nullptr, 0));
             checkCudaError(cuStreamSynchronize(0));
+
+            mData.cssOcc = accelData.cssOcc;
+            mData.cssRad = accelData.cssRad + matData.css;
+            mData.dssS = matData.dss;
+            mData.dssT = 0;
+            mData.graphHeight = 2;
         }
         BUS_TRACE_END();
     }

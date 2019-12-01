@@ -36,6 +36,10 @@ public:
             res.sbtData = packSBTRecord(group, data);
             res.maxSampleDim = 1;
             res.group = group;
+            OptixStackSizes size;
+            checkOptixError(optixProgramGroupGetStackSize(group, &size));
+            res.css = size.cssCC;
+            res.dss = 0;
             return res;
         }
         BUS_TRACE_END();

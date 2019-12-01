@@ -2,7 +2,7 @@
 #include "PluginShared.hpp"
 
 struct CameraData final {
-    unsigned maxSampleDim;
+    unsigned maxSampleDim, dss;
     OptixProgramGroup group;
 };
 

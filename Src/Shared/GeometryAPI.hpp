@@ -2,7 +2,7 @@
 #include "PluginShared.hpp"
 
 struct GeometryData final {
-    unsigned maxSampleDim;
+    unsigned maxSampleDim, dssT, dssS, cssRad, cssOcc, graphHeight;
     OptixTraversableHandle handle;
     OptixAabb aabb;
 };

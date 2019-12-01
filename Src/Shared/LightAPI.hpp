@@ -3,7 +3,7 @@
 
 struct LightData final {
     Data sbtData;
-    unsigned maxSampleDim;
+    unsigned maxSampleDim, dss, css;
     OptixProgramGroup group;
 };
 

@@ -352,6 +352,13 @@ public:
                     res.sbtData.emplace_back(packEmptySBTRecord(prog));
             }
             res.group = pgs;
+            res.dssInit = res.dssSample = 0;
+            for(size_t i = 0; i < pgs.size(); ++i) {
+                OptixStackSizes size;
+                checkOptixError(optixProgramGroupGetStackSize(pgs[i], &size));
+                unsigned& siz = (i ? res.dssSample : res.dssInit);
+                siz = std::max(siz, size.dssDC);
+            }
             return res;
         }
         BUS_TRACE_END();

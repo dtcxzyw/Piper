@@ -3,10 +3,11 @@
 
 struct LightSamplerData final {
     Data sbtData;
-    unsigned maxSampleDim;
+    unsigned maxSampleDim, dss, css;
     OptixProgramGroup group;
 };
 
+// TODO:LightSamplerHelper
 class LightSampler : public Bus::ModuleFunctionBase {
 protected:
     explicit LightSampler(Bus::ModuleInstance& instance)

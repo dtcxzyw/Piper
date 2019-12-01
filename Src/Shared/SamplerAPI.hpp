@@ -4,7 +4,7 @@
 struct SamplerData final {
     std::vector<Data> sbtData;
     std::vector<OptixProgramGroup> group;
-    unsigned maxSPP;
+    unsigned maxSPP, dssSample, dssInit;
 };
 
 class Sampler : public Bus::ModuleFunctionBase {
