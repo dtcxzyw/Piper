@@ -44,14 +44,14 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <OutDir>$(SolutionDir)Bin\</OutDir>
     <ExecutablePath>$(ExecutablePath)</ExecutablePath>
-    <IncludePath>$(OPTIX_PATH)\include;$(CUDA_PATH)\include;$(IncludePath)</IncludePath>
-    <LibraryPath>$(CUDA_PATH)\lib\x64;$(LibraryPath)</LibraryPath>
+    <IncludePath>$(CUDA_PATH)\nvvm\include;$(OPTIX_PATH)\include;$(CUDA_PATH)\include;$(IncludePath)</IncludePath>
+    <LibraryPath>$(CUDA_PATH)\nvvm\lib\x64;$(CUDA_PATH)\lib\x64;$(LibraryPath)</LibraryPath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <OutDir>$(SolutionDir)Bin\</OutDir>
     <ExecutablePath>$(ExecutablePath)</ExecutablePath>
-    <IncludePath>$(OPTIX_PATH)\include;$(CUDA_PATH)\include;$(IncludePath)</IncludePath>
-    <LibraryPath>$(CUDA_PATH)\lib\x64;$(LibraryPath)</LibraryPath>
+    <IncludePath>$(CUDA_PATH)\nvvm\include;$(OPTIX_PATH)\include;$(CUDA_PATH)\include;$(IncludePath)</IncludePath>
+    <LibraryPath>$(CUDA_PATH)\nvvm\lib\x64;$(CUDA_PATH)\lib\x64;$(LibraryPath)</LibraryPath>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <ClCompile>
@@ -64,9 +64,8 @@
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
-      <AdditionalDependencies>cuda.lib;nvrtc.lib;%(AdditionalDependencies)</AdditionalDependencies>
-      <DelayLoadDLLs>
-      </DelayLoadDLLs>
+      <AdditionalDependencies>cuda.lib;nvrtc.lib;nvvm.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <DelayLoadDLLs>nvvm64_33_0.dll</DelayLoadDLLs>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -84,9 +83,8 @@
       <SubSystem>Console</SubSystem>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
-      <AdditionalDependencies>cuda.lib;nvrtc.lib;%(AdditionalDependencies)</AdditionalDependencies>
-      <DelayLoadDLLs>
-      </DelayLoadDLLs>
+      <AdditionalDependencies>cuda.lib;nvrtc.lib;nvvm.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <DelayLoadDLLs>nvvm64_33_0.dll</DelayLoadDLLs>
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>

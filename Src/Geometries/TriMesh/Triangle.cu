@@ -1,7 +1,7 @@
 #include "../../Shared/KernelShared.hpp"
 #include "DataDesc.hpp"
 
-GLOBAL void __closesthit__RCH() {
+DEVICE void __closesthit__RCH() {
     const DataDesc* data = getSBTData<DataDesc>();
     float2 uv = optixGetTriangleBarycentrics();
     float u = uv.x, v = uv.y, w = 1.0f - u - v;
@@ -34,4 +34,4 @@ GLOBAL void __closesthit__RCH() {
 }
 
 // TODO:cut-out
-GLOBAL void __anyhit__OAH() {}
+DEVICE void __anyhit__OAH() {}

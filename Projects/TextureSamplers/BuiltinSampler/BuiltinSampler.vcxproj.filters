@@ -8,6 +8,6 @@
     <ClInclude Include="..\..\..\Src\TextureSamplers\BuiltinSampler\DataDesc.hpp" />
   </ItemGroup>
   <ItemGroup>
-    <None Include="..\..\..\Src\TextureSamplers\BuiltinSampler\Constant.cu" />
+    <CustomBuild Include="..\..\..\Src\TextureSamplers\BuiltinSampler\Constant.cu" />
   </ItemGroup>
 </Project>

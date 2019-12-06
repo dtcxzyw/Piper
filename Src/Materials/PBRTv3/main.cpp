@@ -41,14 +41,15 @@ public:
             data.ks = loadTexture(config, helper, "Specular", mKs, mData.dss);
             data.roughness =
                 loadTexture(config, helper, "Roughness", mRoughness, mData.dss);
-            OptixModule mod = helper->loadModuleFromFile(
-                modulePath().parent_path() / "Plastic.ptx");
+            const ModuleDesc& mod =
+                helper->getModuleManager()->getModuleFromFile(
+                    modulePath().parent_path() / "Plastic.ptx");
             OptixProgramGroupDesc desc = {};
             desc.flags = 0;
             desc.kind = OPTIX_PROGRAM_GROUP_KIND_CALLABLES;
             desc.callables.entryFunctionNameCC =
-                "__continuation_callable__sample";
-            desc.callables.moduleCC = mod;
+                mod.map("__continuation_callable__sample");
+            desc.callables.moduleCC = mod.handle.get();
             OptixProgramGroupOptions opt = {};
             OptixProgramGroup group;
             checkOptixError(optixProgramGroupCreate(helper->getContext(), &desc,

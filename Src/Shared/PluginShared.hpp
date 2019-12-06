@@ -22,6 +22,38 @@ class Asset;
 class Light;
 using Name = std::string_view;
 
+struct ModuleDeleter final {
+    void operator()(OptixModule mod) const {
+        checkOptixError(optixModuleDestroy(mod));
+    }
+};
+using Module = std::unique_ptr<OptixModule_t, ModuleDeleter>;
+struct ModuleDesc final {
+    Module handle;
+    std::map<std::string, std::string> nameMap;
+    ModuleDesc() = default;
+    const char* map(const std::string& name) const {
+        auto iter = nameMap.find(name);
+        if(iter != nameMap.cend())
+            return iter->second.c_str();
+        return nullptr;
+    }
+};
+
+class ModuleManagerAPI : private Unmoveable {
+public:
+    virtual const ModuleDesc&
+    getModule(const std::string& id,
+              const std::function<std::string()>& ptxGen) = 0;
+    virtual const ModuleDesc& getModuleFromFile(const fs::path& file) = 0;
+    virtual std::string compileSrc(const std::string& src) = 0;
+    virtual std::string compileNVVMIR(const std::vector<Data>& bitcode) = 0;
+    virtual Data linkPTX(const std::vector<std::string>& ptx) = 0;
+    virtual std::string cubin2PTX(const Data& cubin) = 0;
+};
+
+using ModuleManager = ModuleManagerAPI*;
+
 class PluginHelperAPI : private Unmoveable {
 private:
     virtual std::shared_ptr<Asset>
@@ -31,9 +63,7 @@ public:
     virtual fs::path scenePath() const = 0;
     virtual OptixDeviceContext getContext() const = 0;
     virtual bool isDebug() const = 0;
-    virtual OptixModule loadModuleFromPTX(const std::string& ptx) = 0;
-    virtual OptixModule loadModuleFromFile(const fs::path& path) = 0;
-    virtual OptixModule loadModuleFromSrc(const std::string& src) = 0;
+    virtual ModuleManager getModuleManager() = 0;
     virtual unsigned addCallable(OptixProgramGroup group,
                                  const Data& sbtData) = 0;
     virtual unsigned addHitGroup(OptixProgramGroup radGroup, const Data& rad,

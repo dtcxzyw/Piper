@@ -34,28 +34,30 @@ public:
             mSamplePerLaunch = config->attribute("SamplePerLaunch")->asUint();
             mFilmSize = config->attribute("FilmSize")->asUint2();
             mFiltBadColor = config->getBool("FiltBadColor", false);
-            OptixModule mod = helper->loadModuleFromFile(
-                modulePath().parent_path() / "Kernel.ptx");
+            const ModuleDesc& mod =
+                helper->getModuleManager()->getModuleFromFile(
+                    modulePath().parent_path() / "Kernel.ptx");
             OptixProgramGroupDesc desc[4] = {};
             desc[0].flags = 0;
             desc[0].kind = OPTIX_PROGRAM_GROUP_KIND_RAYGEN;
-            desc[0].raygen.entryFunctionName = "__raygen__renderKernel";
-            desc[0].raygen.module = mod;
+            desc[0].raygen.entryFunctionName =
+                mod.map("__raygen__renderKernel");
+            desc[0].raygen.module = mod.handle.get();
             desc[1].flags = 0;
             desc[1].kind = OPTIX_PROGRAM_GROUP_KIND_EXCEPTION;
             desc[1].exception.entryFunctionName =
-                (helper->isDebug() ? "__exception__default" :
-                                     "__exception__silence");
-            desc[1].exception.module = mod;
+                mod.map(helper->isDebug() ? "__exception__default" :
+                                            "__exception__silence");
+            desc[1].exception.module = mod.handle.get();
             desc[2].flags = 0;
             desc[2].kind = OPTIX_PROGRAM_GROUP_KIND_MISS;
-            desc[2].miss.entryFunctionName = "__miss__rad";
-            desc[2].miss.module = mod;
+            desc[2].miss.entryFunctionName = mod.map("__miss__rad");
+            desc[2].miss.module = mod.handle.get();
             desc[3].flags = 0;
             desc[3].kind = OPTIX_PROGRAM_GROUP_KIND_MISS;
-            desc[3].miss.entryFunctionName = "__miss__occ";
-            desc[3].miss.module = mod;
-            OptixProgramGroup groups[4];
+            desc[3].miss.entryFunctionName = mod.map("__miss__occ");
+            desc[3].miss.module = mod.handle.get();
+            OptixProgramGroup groups[4] = {};
             OptixProgramGroupOptions opt = {};
             checkOptixError(optixProgramGroupCreate(
                 helper->getContext(), desc, 4, &opt, nullptr, nullptr, groups));

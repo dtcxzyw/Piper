@@ -6,7 +6,6 @@
 #pragma warning(pop)
 
 #define DEVICE extern "C" __device__
-#define GLOBAL extern "C" __global__
 #define CONSTANT static __constant__ __device__
 #define INLINEDEVICE __inline__ __device__
 

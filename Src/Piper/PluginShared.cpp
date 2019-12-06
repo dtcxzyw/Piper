@@ -4,7 +4,6 @@
 #include <sstream>
 #include <unordered_map>
 #pragma warning(push, 0)
-#include <nvrtc.h>
 #include <optix_stubs.h>
 #pragma warning(pop)
 
@@ -21,30 +20,147 @@ static std::string loadStr(const fs::path& path) {
     BUS_TRACE_END();
 }
 
-struct ModuleDeleter final {
-    void operator()(OptixModule mod) const {
-        checkOptixError(optixModuleDestroy(mod));
+static Data loadData(const fs::path& path) {
+    BUS_TRACE_BEG() {
+        static_assert(sizeof(char) == sizeof(std::byte));
+        auto size = fs::file_size(path);
+        std::ifstream in(path, std::ios::in | std::ios::binary);
+        Data res(size);
+        in.read(reinterpret_cast<char*>(res.data()), size);
+        return res;
     }
+    BUS_TRACE_END();
+}
+
+static void remap(std::string& ptx, std::map<std::string, std::string>& map,
+                  const std::string& suffix) {
+    BUS_TRACE_BEG() {
+        std::vector<std::string> funcName;
+        std::stringstream ss;
+        ss << ptx;
+        std::string line;
+        std::string base = ".visible .func";
+        while(std::getline(ss, line)) {
+            if(line.substr(0, base.size()) == base) {
+                std::string info = line.substr(base.size());
+                if(info.find(".param") != info.npos) {
+                    auto pos = info.find_first_of(')');
+                    info = info.substr(pos);
+                }
+                while(info.size() &&
+                      !(info.front() == '_' || isalnum(info.front())))
+                    info.erase(info.begin());
+                while(info.size() &&
+                      !(info.back() == '_' || isalnum(info.back())))
+                    info.pop_back();
+                funcName.push_back(info);
+            }
+        }
+        for(auto&& id : funcName) {
+            // TODO:automaton/regex_replace
+            std::string rep = id + suffix;
+            size_t last = 0;
+            do {
+                auto pos = ptx.find(id, last + 1);
+                if(pos == ptx.npos)
+                    break;
+                last = pos;
+                size_t nxt = pos + id.size();
+                if(nxt != ptx.size() && (ptx[nxt] == '_' || isalnum(ptx[nxt])))
+                    continue;
+                ptx = ptx.substr(0, pos) + rep + ptx.substr(nxt);
+            } while(true);
+            map[id] = id + suffix;
+        }
+    }
+    BUS_TRACE_END();
+}
+
+class ModuleManagerImpl : public ModuleManagerAPI {
+private:
+    OptixDeviceContext mContext;
+    std::unordered_map<std::string, ModuleDesc> mModules;
+    OptixModuleCompileOptions mMCO;
+    OptixPipelineCompileOptions mPCO;
+    std::string mKernelInclude;
+    Data mLibDevice;
+
+public:
+    ModuleManagerImpl(OptixDeviceContext context,
+                      const OptixModuleCompileOptions& MCO,
+                      const OptixPipelineCompileOptions& PCO)
+        : mContext(context), mMCO(MCO), mPCO(PCO) {
+        // TODO:compress KernelInclude.hpp
+        mKernelInclude = loadStr("KernelInclude.hpp");
+        auto removeCRT = [](std::string& str) {
+            auto beg = str.find("_CRT_BEGIN_C_HEADER");
+            if(beg == str.npos)
+                return false;
+            auto end = str.find("_CRT_END_C_HEADER");
+            str = str.substr(0, beg) + str.substr(end + 17);
+            return true;
+        };
+        while(removeCRT(mKernelInclude))
+            ;
+        /*
+        //Debug Output
+        std::ofstream out("out.hpp");
+        out << mKernelInclude << std::endl;
+        */
+        mLibDevice = loadData("libdevice.10.bc");
+    }
+    const ModuleDesc&
+    getModule(const std::string& id,
+              const std::function<std::string()>& ptxGen) override {
+        BUS_TRACE_BEG() {
+            // TODO:ptx cache
+            ModuleDesc& mod = mModules[id];
+            if(!mod.handle) {
+                auto ptx = ptxGen();
+                std::hash<std::string> hasher;
+                std::stringstream ss;
+                ss << "_" << std::hex << std::uppercase << hasher(id);
+                remap(ptx, mod.nameMap, ss.str());
+                OptixModule handle;
+                checkOptixError(optixModuleCreateFromPTX(
+                    mContext, &mMCO, &mPCO, ptx.c_str(), ptx.size(), nullptr,
+                    nullptr, &handle));
+                mod.handle.reset(handle);
+            }
+            return mod;
+        }
+        BUS_TRACE_END();
+    }
+    const ModuleDesc& getModuleFromFile(const fs::path& file) override {
+        BUS_TRACE_BEG() {
+            return getModule(file.string(), [file] { return loadStr(file); });
+        }
+        BUS_TRACE_END();
+    }
+    std::string compileSrc(const std::string& src) override;
+    std::string compileNVVMIR(const std::vector<Data>& bc) override;
+    Data linkPTX(const std::vector<std::string>& ptx) override;
+    std::string cubin2PTX(const Data& cubin) override;
 };
 
-using Module = std::unique_ptr<OptixModule_t, ModuleDeleter>;
-
+// TODO:Divide functions
+// ModuleManager
+// AssetManager
+// ComputeManager
+// PipelineManager
 class PluginHelperImpl final : public PluginHelperAPI {
 private:
     OptixDeviceContext mContext;
     Bus::ModuleSystem& mSys;
     fs::path mScenePath;
     bool mDebug;
-    OptixModuleCompileOptions mMCO;
-    OptixPipelineCompileOptions mPCO;
     std::vector<Data>& mCData;
     std::vector<Data>& mHData;
     std::set<OptixProgramGroup>& mGroups;
     std::vector<std::shared_ptr<Light>>& mLights;
-    std::unordered_map<std::string, Module> mModules;
     std::unordered_map<std::string, std::shared_ptr<Asset>> mAssets;
     std::unordered_map<std::string, std::shared_ptr<Config>> mAssetConfig;
-    std::string mKernelInclude;
+    std::unique_ptr<ModuleManagerImpl> mModuleManager;
 
     std::shared_ptr<Asset>
     instantiateAssetImpl(Name api, std::shared_ptr<Config> cfg) override {
@@ -85,30 +201,17 @@ public:
                      std::vector<std::shared_ptr<Light>>& lights,
                      std::set<OptixProgramGroup>& group)
         : mContext(context), mSys(sys), mScenePath(scenePath), mDebug(debug),
-          mMCO(MCO), mPCO(PCO), mCData(cdata), mHData(hdata), mLights(lights),
-          mGroups(group) {
+          mCData(cdata), mHData(hdata), mLights(lights), mGroups(group) {
         for(auto&& asset : assCfg->expand()) {
             mAssetConfig[asset->attribute("Name")->asString()] = asset;
         }
-        // TODO:compress KernelInclude.hpp
-        mKernelInclude = loadStr("KernelInclude.hpp");
-        auto removeCRT = [](std::string& str) {
-            auto beg = str.find("_CRT_BEGIN_C_HEADER");
-            if(beg == str.npos)
-                return false;
-            auto end = str.find("_CRT_END_C_HEADER");
-            str = str.substr(0, beg) + str.substr(end + 17);
-            return true;
-        };
-        while(removeCRT(mKernelInclude))
-            ;
-        /*
-        //Debug Output
-        std::ofstream out("out.hpp");
-        out << mKernelInclude << std::endl;
-        */
+        mModuleManager = std::make_unique<ModuleManagerImpl>(context, MCO, PCO);
     }
-    unsigned addCallable(OptixProgramGroup group, const Data& sbtData) {
+    ModuleManager getModuleManager() override {
+        return mModuleManager.get();
+    }
+    unsigned addCallable(OptixProgramGroup group,
+                         const Data& sbtData) override {
         mGroups.insert(group);
         unsigned res = static_cast<unsigned>(mCData.size()) +
             static_cast<unsigned>(SBTSlot::userOffset);
@@ -137,24 +240,6 @@ public:
     bool isDebug() const override {
         return mDebug;
     }
-    OptixModule loadModuleFromPTX(const std::string& ptx) override {
-        BUS_TRACE_BEG() {
-            Module& mod = mModules[ptx];
-            if(!mod) {
-                OptixModule handle;
-                checkOptixError(optixModuleCreateFromPTX(
-                    mContext, &mMCO, &mPCO, ptx.c_str(), ptx.size(), nullptr,
-                    nullptr, &handle));
-                mod.reset(handle);
-            }
-            return mod.get();
-        }
-        BUS_TRACE_END();
-    }
-    OptixModule loadModuleFromFile(const fs::path& file) override {
-        return loadModuleFromPTX(loadStr(file));
-    }
-    OptixModule loadModuleFromSrc(const std::string& src) override;
 };
 
 std::unique_ptr<PluginHelperAPI>
@@ -170,6 +255,10 @@ buildPluginHelper(OptixDeviceContext context, Bus::ModuleSystem& sys,
                                               lights, group);
 }
 
+#pragma warning(push, 0)
+#include <nvrtc.h>
+#pragma warning(pop)
+
 static void checkNVRTCError(nvrtcResult res) {
     if(res != NVRTC_SUCCESS)
         throw std::runtime_error(std::string("[NVRTCError]") +
@@ -182,8 +271,8 @@ struct NVRTCProgramDeleter final {
     }
 };
 
-OptixModule PluginHelperImpl::loadModuleFromSrc(const std::string& src) {
-    BUS_TRACE_BEG() {
+std::string ModuleManagerImpl::compileSrc(const std::string& src) {
+    BUS_TRACE_BEGIN("Piper.Builtin.PluginHelper.NVRTC") {
         // TODO:PTX Caching
         using Program = std::unique_ptr<_nvrtcProgram, NVRTCProgramDeleter>;
         Program program;
@@ -193,6 +282,7 @@ OptixModule PluginHelperImpl::loadModuleFromSrc(const std::string& src) {
         checkNVRTCError(nvrtcCreateProgram(&prog, src.c_str(), "kernel.cu", 1,
                                            &header, &headerName));
         program.reset(prog);
+        // TODO:optimization level
         const char* opt[] = { "-use_fast_math", "-default-device", "-rdc=true",
                               "-w", "-std=c++14" };
         try {
@@ -214,7 +304,101 @@ OptixModule PluginHelperImpl::loadModuleFromSrc(const std::string& src) {
         checkNVRTCError(nvrtcGetPTXSize(program.get(), &siz));
         std::string ptx(siz, '#');
         checkNVRTCError(nvrtcGetPTX(program.get(), ptx.data()));
-        return loadModuleFromPTX(ptx);
+        return ptx;
+    }
+    BUS_TRACE_END();
+}
+
+#pragma warning(push, 0)
+#include <nvvm.h>
+#pragma warning(pop)
+
+static void checkNVVMError(nvvmResult res) {
+    if(res != NVVM_SUCCESS)
+        throw std::runtime_error(std::string("[NVVMError]") +
+                                 nvvmGetErrorString(res));
+}
+
+struct NVVMProgramDeleter final {
+    void operator()(nvvmProgram prog) {
+        checkNVVMError(nvvmDestroyProgram(&prog));
+    }
+};
+
+std::string ModuleManagerImpl::compileNVVMIR(const std::vector<Data>& bitcode) {
+    BUS_TRACE_BEGIN("Piper.Builtin.PluginHelper.NVVM") {
+        using Program = std::unique_ptr<_nvvmProgram, NVVMProgramDeleter>;
+        Program program;
+        nvvmProgram prog;
+        checkNVVMError(nvvmCreateProgram(&prog));
+        program.reset(prog);
+        for(auto&& bc : bitcode) {
+            checkNVVMError(nvvmAddModuleToProgram(
+                prog, reinterpret_cast<const char*>(bc.data()), bc.size(),
+                nullptr));
+        }
+        checkNVVMError(nvvmLazyAddModuleToProgram(
+            prog, reinterpret_cast<const char*>(mLibDevice.data()),
+            mLibDevice.size(), "libdevice"));
+        // TODO:optimization level
+        const char* opt[] = { "-prec-div=0", "-prec-sqrt=0" };
+        try {
+            checkNVVMError(nvvmCompileProgram(
+                prog, static_cast<int>(std::size(opt)), opt));
+        } catch(...) {
+            size_t siz;
+            if(nvvmGetProgramLogSize(prog, &siz) == NVVM_SUCCESS) {
+                std::string logStr(siz, '@');
+                if(nvvmGetProgramLog(prog, logStr.data()) == NVVM_SUCCESS) {
+                    std::throw_with_nested(
+                        std::runtime_error("Compile Log:" + logStr));
+                }
+            }
+            throw;
+        }
+        size_t siz;
+        checkNVVMError(nvvmGetCompiledResultSize(prog, &siz));
+        std::string ptx(siz, '#');
+        checkNVVMError(nvvmGetCompiledResult(program.get(), ptx.data()));
+        return ptx;
+    }
+    BUS_TRACE_END();
+}
+
+struct LinkerDeleter final {
+    void operator()(CUlinkState prog) {
+        checkCudaError(cuLinkDestroy(prog));
+    }
+};
+
+Data ModuleManagerImpl::linkPTX(const std::vector<std::string>& ptx) {
+    BUS_TRACE_BEGIN("Piper.Builtin.PluginHelper.JITLinker") {
+        using Linker = std::unique_ptr<CUlinkState_st, LinkerDeleter>;
+        Linker linker;
+        CUlinkState state;
+        // TODO:CUjit_option op[] = {};
+        checkCudaError(cuLinkCreate(0, nullptr, nullptr, &state));
+        linker.reset(state);
+        for(auto&& src : ptx) {
+            // TODO:other input types
+            // TODO:data name
+            checkCudaError(cuLinkAddData(
+                state, CU_JIT_INPUT_PTX, const_cast<char*>(src.c_str()),
+                src.size(), nullptr, 0, nullptr, nullptr));
+        }
+        Data::value_type* cubinPtr;
+        size_t size;
+        checkCudaError(
+            cuLinkComplete(state, reinterpret_cast<void**>(&cubinPtr), &size));
+        return Data(cubinPtr, cubinPtr + size);
+    }
+    BUS_TRACE_END();
+}
+
+std::string ModuleManagerImpl::cubin2PTX(const Data& cubin) {
+    // use cuobjdump
+    BUS_TRACE_BEGIN("Piper.Builtin.PluginHelper.cuobjdump") {
+        BUS_TRACE_THROW(std::logic_error("unimplemented feature"));
     }
     BUS_TRACE_END();
 }

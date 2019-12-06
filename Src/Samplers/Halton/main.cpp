@@ -314,27 +314,29 @@ public:
             reporter().apply(ReportLevel::Debug, "Source:\n" + src,
                              BUS_DEFSRCLOC());
                              */
-            OptixModule mod = helper->loadModuleFromSrc(src);
+            std::hash<std::string> hasher;
+            const ModuleDesc& mod = helper->getModuleManager()->getModule(
+                BUS_DEFAULT_MODULE_NAME + std::to_string(hasher(src)),
+                [&] { return helper->getModuleManager()->compileSrc(src); });
             std::vector<OptixProgramGroupDesc> descs;
             // init
             {
                 OptixProgramGroupDesc desc = {};
                 desc.flags = 0;
                 desc.kind = OPTIX_PROGRAM_GROUP_KIND_CALLABLES;
-                desc.callables.moduleDC = mod;
-                desc.callables.entryFunctionNameDC = "__direct_callable__init";
+                desc.callables.moduleDC = mod.handle.get();
+                desc.callables.entryFunctionNameDC =
+                    mod.map("__direct_callable__init");
                 descs.emplace_back(desc);
             }
-            std::vector<std::string> funcNames;
             for(unsigned i = 0; i < maxDim; ++i) {
                 unsigned base = primeTable[i + 2];
-                funcNames.emplace_back("__direct_callable__sample" +
-                                       std::to_string(base));
                 OptixProgramGroupDesc desc = {};
                 desc.flags = 0;
                 desc.kind = OPTIX_PROGRAM_GROUP_KIND_CALLABLES;
-                desc.callables.moduleDC = mod;
-                desc.callables.entryFunctionNameDC = funcNames.back().c_str();
+                desc.callables.moduleDC = mod.handle.get();
+                desc.callables.entryFunctionNameDC =
+                    mod.map("__direct_callable__sample" + std::to_string(base));
                 descs.emplace_back(desc);
             }
             std::vector<OptixProgramGroup> pgs(descs.size());

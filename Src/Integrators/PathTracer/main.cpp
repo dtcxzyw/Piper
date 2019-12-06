@@ -2,6 +2,7 @@
 #include "../../Shared/IntegratorAPI.hpp"
 #include "DataDesc.hpp"
 #pragma warning(push, 0)
+#define NOMINMAX
 #include <optix_function_table_definition.h>
 #include <optix_stubs.h>
 #pragma warning(pop)
@@ -17,14 +18,15 @@ public:
     IntegratorData init(PluginHelper helper,
                         std::shared_ptr<Config> config) override {
         BUS_TRACE_BEG() {
-            OptixModule mod = helper->loadModuleFromFile(
-                modulePath().parent_path() / "PathKernel.ptx");
+            const ModuleDesc& mod =
+                helper->getModuleManager()->getModuleFromFile(
+                    modulePath().parent_path() / "PathKernel.ptx");
             OptixProgramGroupDesc desc = {};
             desc.kind = OPTIX_PROGRAM_GROUP_KIND_CALLABLES;
             desc.flags = 0;
             desc.callables.entryFunctionNameCC =
-                "__continuation_callable__traceKernel";
-            desc.callables.moduleCC = mod;
+                mod.map("__continuation_callable__traceKernel");
+            desc.callables.moduleCC = mod.handle.get();
             OptixProgramGroupOptions opt = {};
             OptixProgramGroup group;
             checkOptixError(optixProgramGroupCreate(helper->getContext(), &desc,
@@ -35,7 +37,7 @@ public:
             data.maxDepth = config->attribute("MaxDepth")->asUint();
             IntegratorData res;
             res.sbtData = packSBTRecord(mGroup.get(), data);
-            res.maxSampleDim = 0;
+            res.maxSampleDim = std::max(data.maxDepth, 3U) - 3;
             res.maxTraceDepth = data.maxDepth;
             res.group = mGroup.get();
             OptixStackSizes size;

@@ -21,13 +21,15 @@ public:
         BUS_TRACE_BEG() {
             mSensor = device->attribute("Sensor")->asVec2();
             mSensor /= 1e3f;
-            OptixModule mod = helper->loadModuleFromFile(
-                modulePath().parent_path() / "RayGen.ptx");
+            const ModuleDesc& mod =
+                helper->getModuleManager()->getModuleFromFile(
+                    modulePath().parent_path() / "RayGen.ptx");
             OptixProgramGroupDesc desc = {};
             desc.flags = 0;
             desc.kind = OPTIX_PROGRAM_GROUP_KIND_CALLABLES;
-            desc.callables.moduleDC = mod;
-            desc.callables.entryFunctionNameDC = "__direct_callable__sampleRay";
+            desc.callables.moduleDC = mod.handle.get();
+            desc.callables.entryFunctionNameDC =
+                mod.map("__direct_callable__sampleRay");
             OptixProgramGroupOptions opt = {};
             OptixProgramGroup group;
             checkOptixError(optixProgramGroupCreate(helper->getContext(), &desc,

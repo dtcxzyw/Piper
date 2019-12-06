@@ -14,6 +14,16 @@ DEVICE Spectrum __continuation_callable__traceKernel(RaySample ray,
         payload.hit = false;
         payload.f = Spectrum{ 0.0f };
         payload.rad = Spectrum{ 0.0f };
+        // Russian roulette
+        if(i > 3) {
+            float q = fmax(0.05f,
+                           1.0f -
+                               (0.212671f * att.r + 0.715160f * att.g +
+                                0.072169f * att.b));
+            if((*sampler)() < q)
+                break;
+            att /= 1.0 - q;
+        }
         // TODO:rayTime
         optixTrace(launchParam.root, v2f(ray.ori), v2f(ray.dir), eps, 1e20f,
                    0.0f, 255, OPTIX_RAY_FLAG_NONE, radianceOffset,

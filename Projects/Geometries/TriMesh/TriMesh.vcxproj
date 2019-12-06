@@ -111,10 +111,10 @@
   <ItemGroup>
     <CustomBuild Include="..\..\..\Src\Geometries\TriMesh\Triangle.cu">
       <FileType>Document</FileType>
-      <Command Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">nvcc %(FullPath) -o $(TargetDir)%(Filename).ptx  -I "$(CUDA_PATH)\include;$(OPTIX_PATH)include" -cudart=none -ptx -O2 -m64 -arch=sm_50 -use_fast_math -w</Command>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">nvcc %(FullPath) -o $(TargetDir)%(Filename).ptx  -I "$(CUDA_PATH)\include;$(OPTIX_PATH)include" -cudart=none -ptx -O2 -m64 -arch=sm_50 -use_fast_math -w -rdc=true</Command>
       <LinkObjects Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">false</LinkObjects>
       <BuildInParallel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</BuildInParallel>
-      <Command Condition="'$(Configuration)|$(Platform)'=='Release|x64'">nvcc %(FullPath) -o $(TargetDir)%(Filename).ptx  -I "$(CUDA_PATH)\include;$(OPTIX_PATH)include" -cudart=none -ptx -O2 -m64 -arch=sm_50 -use_fast_math -w</Command>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Release|x64'">nvcc %(FullPath) -o $(TargetDir)%(Filename).ptx  -I "$(CUDA_PATH)\include;$(OPTIX_PATH)include" -cudart=none -ptx -O2 -m64 -arch=sm_50 -use_fast_math -w -rdc=true</Command>
       <LinkObjects Condition="'$(Configuration)|$(Platform)'=='Release|x64'">false</LinkObjects>
       <BuildInParallel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</BuildInParallel>
       <Message Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">build %(Filename) PTX</Message>

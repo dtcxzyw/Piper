@@ -4,7 +4,7 @@
 #define _NODISCARD
 #define WCHAR_MIN 0x0000
 #define WCHAR_MAX 0xffff
-#define CUDA_VERSION 10010
+#define CUDA_VERSION 10020
 namespace std {
     typedef signed char int8_t;
     typedef short int16_t;

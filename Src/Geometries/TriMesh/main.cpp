@@ -46,17 +46,18 @@ public:
             data.normal = static_cast<Vec3*>(meshData.normal);
             data.texCoord = static_cast<Vec2*>(meshData.texCoord);
 
-            OptixModule mod = helper->loadModuleFromFile(
-                modulePath().parent_path() / "Triangle.ptx");
+            const ModuleDesc& mod =
+                helper->getModuleManager()->getModuleFromFile(
+                    modulePath().parent_path() / "Triangle.ptx");
             OptixProgramGroupDesc desc[2] = {};
             desc[0].flags = desc[1].flags = 0;
             desc[0].kind = desc[1].kind = OPTIX_PROGRAM_GROUP_KIND_HITGROUP;
             OptixProgramGroupHitgroup& hit0 = desc[0].hitgroup;
-            hit0.moduleCH = mod;
-            hit0.entryFunctionNameCH = "__closesthit__RCH";
+            hit0.moduleCH = mod.handle.get();
+            hit0.entryFunctionNameCH = mod.map("__closesthit__RCH");
             OptixProgramGroupHitgroup& hit1 = desc[1].hitgroup;
-            hit1.moduleAH = mod;
-            hit1.entryFunctionNameAH = "__anyhit__OAH";
+            hit1.moduleAH = mod.handle.get();
+            hit1.entryFunctionNameAH = mod.map("__anyhit__OAH");
             OptixProgramGroupOptions gopt = {};
             OptixProgramGroup group[2];
             checkOptixError(optixProgramGroupCreate(

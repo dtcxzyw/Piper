@@ -20,13 +20,15 @@ public:
         BUS_TRACE_BEG() {
             Constant data;
             data.color = cfg->attribute("Color")->asVec3();
-            OptixModule mod = helper->loadModuleFromFile(
-                modulePath().parent_path() / "Constant.ptx");
+            const ModuleDesc& mod =
+                helper->getModuleManager()->getModuleFromFile(
+                    modulePath().parent_path() / "Constant.ptx");
             OptixProgramGroupDesc desc = {};
             desc.flags = 0;
             desc.kind = OPTIX_PROGRAM_GROUP_KIND_CALLABLES;
-            desc.callables.moduleDC = mod;
-            desc.callables.entryFunctionNameDC = "__direct_callable__tex";
+            desc.callables.moduleDC = mod.handle.get();
+            desc.callables.entryFunctionNameDC =
+                mod.map("__direct_callable__tex");
             OptixProgramGroupOptions opt = {};
             OptixProgramGroup group;
             checkOptixError(optixProgramGroupCreate(helper->getContext(), &desc,

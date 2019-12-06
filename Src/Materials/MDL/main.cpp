@@ -100,8 +100,6 @@ public:
             OptixProgramGroupDesc desc = {};
             desc.flags = 0;
             desc.kind = OPTIX_PROGRAM_GROUP_KIND_CALLABLES;
-            desc.callables.entryFunctionNameCC =
-                "__continuation_callable__sample";
             // TODO:render state usage
             {
                 auto usage = code->get_render_state_usage();
@@ -128,7 +126,7 @@ public:
                                  BUS_DEFSRCLOC());
             }
             BUS_TRACE_POINT();
-            // TODO:merge PTX
+            // TODO:link PTX
             auto samplePTX = loadPTX(modulePath().parent_path() / "Kernel.ptx");
             std::string mdlPTX = code->get_code();
             mdlPTX = mdlPTX.substr(mdlPTX.find(".address_size") + 16);
@@ -139,7 +137,13 @@ public:
             // BUG:not support printf
             auto finalPTX = header + mdlPTX + kernel;
             // reporter().apply(ReportLevel::Debug, finalPTX, BUS_DEFSRCLOC());
-            desc.callables.moduleCC = helper->loadModuleFromPTX(finalPTX);
+            std::hash<std::string> hasher;
+            const ModuleDesc& mod = helper->getModuleManager()->getModule(
+                BUS_DEFAULT_MODULE_NAME + std::to_string(hasher(finalPTX)),
+                [&] { return finalPTX; });
+            desc.callables.moduleCC = mod.handle.get();
+            desc.callables.entryFunctionNameCC =
+                mod.map("__continuation_callable__sample");
 
             BUS_TRACE_POINT();
 

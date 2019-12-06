@@ -22,13 +22,14 @@ public:
             data.lum = cfg->attribute("Lum")->asVec3();
             data.negDir =
                 glm::normalize(-cfg->attribute("Direction")->asVec3());
-            OptixModule mod = helper->loadModuleFromFile(
-                modulePath().parent_path() / "DirLight.ptx");
+            const ModuleDesc& mod =
+                helper->getModuleManager()->getModuleFromFile(
+                    modulePath().parent_path() / "DirLight.ptx");
             OptixProgramGroupDesc desc = {};
             desc.kind = OPTIX_PROGRAM_GROUP_KIND_CALLABLES;
-            desc.callables.moduleCC = mod;
+            desc.callables.moduleCC = mod.handle.get();
             desc.callables.entryFunctionNameCC =
-                "__continuation_callable__sample";
+                mod.map("__continuation_callable__sample");
             OptixProgramGroupOptions opt = {};
             OptixProgramGroup group;
             checkOptixError(optixProgramGroupCreate(helper->getContext(), &desc,

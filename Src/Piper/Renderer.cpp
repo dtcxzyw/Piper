@@ -113,8 +113,9 @@ Context createContext(CUcontext ctx, Bus::Reporter& reporter,
             context, OptixDeviceProperty::OPTIX_DEVICE_PROPERTY_RTCORE_VERSION,
             &rtver, sizeof(rtver)));
         reporter.apply(ReportLevel::Info,
-                       "RTCore Version:" + std::to_string(rtver / 10) + '.' +
-                           std::to_string(rtver % 10),
+                       (rtver ? "RTCore Version:" + std::to_string(rtver / 10) +
+                                '.' + std::to_string(rtver % 10) :
+                                std::string("No RTCore")),
                        BUS_DEFSRCLOC());
         return Context{ context };
     }
