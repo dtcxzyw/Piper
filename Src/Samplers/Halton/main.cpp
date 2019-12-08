@@ -162,8 +162,6 @@ void generateSample(std::stringstream& out, unsigned maxDim,
                     std::shared_ptr<Config> config, Bus::Reporter& reporter,
                     const std::vector<unsigned>& primeTable) {
     BUS_TRACE_BEG() {
-        if(maxDim > 256)
-            BUS_TRACE_THROW(std::runtime_error("Need MaxDim<=256"));
         std::string initType = config->getString("Type", "Faure");
         unsigned maxTableSize = config->getUint("MaxPermTableSize", 500U);
         if(maxTableSize > 65536)
@@ -299,6 +297,8 @@ public:
     SamplerData init(PluginHelper helper, std::shared_ptr<Config> config,
                      Uint2 size, unsigned maxDim) override {
         BUS_TRACE_BEG() {
+            if(maxDim > 256)
+                BUS_TRACE_THROW(std::runtime_error("Need MaxDim<=256"));
             std::vector<unsigned> primeTable = getPrimeTable(maxDim + 2);
             std::stringstream ss;
             ss << "#include <KernelInclude.hpp>" << std::endl;
@@ -310,6 +310,8 @@ public:
                              "maxSPP=" + std::to_string(res.maxSPP),
                              BUS_DEFSRCLOC());
             auto src = ss.str();
+
+            BUS_TRACE_POINT();
             /*
             reporter().apply(ReportLevel::Debug, "Source:\n" + src,
                              BUS_DEFSRCLOC());
@@ -318,6 +320,8 @@ public:
             const ModuleDesc& mod = helper->getModuleManager()->getModule(
                 BUS_DEFAULT_MODULE_NAME + std::to_string(hasher(src)),
                 [&] { return helper->getModuleManager()->compileSrc(src); });
+            BUS_TRACE_POINT();
+
             std::vector<OptixProgramGroupDesc> descs;
             // init
             {

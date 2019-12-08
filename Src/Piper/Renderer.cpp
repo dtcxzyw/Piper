@@ -221,6 +221,8 @@ void renderImpl(std::shared_ptr<Config> config, const fs::path& scenePath,
             context.get(), sys, config->attribute("Assets"), scenePath, debug,
             MCO, PCO, callableData, hitGroupData, lights, groups);
 
+        BUS_TRACE_POINT();
+
         auto& reporter = sys.getReporter();
 
         DriverData ddata;
@@ -276,6 +278,8 @@ void renderImpl(std::shared_ptr<Config> config, const fs::path& scenePath,
                            BUS_DEFSRCLOC());
         reporter.apply(ReportLevel::Info, "Compiling Pipeline",
                        BUS_DEFSRCLOC());
+
+        BUS_TRACE_POINT();
 
         std::vector<OptixProgramGroup> linearGroup{ groups.begin(),
                                                     groups.end() };
@@ -336,6 +340,8 @@ void renderImpl(std::shared_ptr<Config> config, const fs::path& scenePath,
             driver->setStack(pipe, stack);
         }
 
+        BUS_TRACE_POINT();
+
         LaunchParam launchParam;
         launchParam.sampleOffset = static_cast<unsigned>(SBTSlot::userOffset) +
             static_cast<unsigned>(callableData.size());
@@ -394,6 +400,8 @@ void renderImpl(std::shared_ptr<Config> config, const fs::path& scenePath,
         checkCudaError(cuStreamSynchronize(0));
         auto dHelper = std::make_unique<DriverHelperImpl>(
             sbt, pipe, asPtr(param), ddata.size);
+
+        BUS_TRACE_POINT();
         reporter.apply(ReportLevel::Info, "Everything is ready.",
                        BUS_DEFSRCLOC());
         auto renderTs = Clock::now();

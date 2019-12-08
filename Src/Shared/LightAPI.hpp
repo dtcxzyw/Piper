@@ -18,3 +18,16 @@ public:
 
     virtual LightData getData() = 0;
 };
+
+class EnvironmentLight : public Bus::ModuleFunctionBase {
+protected:
+    explicit EnvironmentLight(Bus::ModuleInstance& instance)
+        : ModuleFunctionBase(instance) {}
+
+public:
+    static Name getInterface() {
+        return "Piper.EnvironmentLight:1";
+    }
+    virtual LightData init(PluginHelper helper,
+                           std::shared_ptr<Config> config) = 0;
+};

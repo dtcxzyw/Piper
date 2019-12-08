@@ -23,7 +23,6 @@ DEVICE void __raygen__renderKernel() {
         Vec4(acc, static_cast<float>(count));
 }
 
-DEVICE void __miss__rad() {}
 DEVICE void __miss__occ() {
     optixSetPayload_0(1);
 }

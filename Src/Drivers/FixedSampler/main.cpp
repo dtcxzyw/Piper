@@ -1,6 +1,7 @@
 #include "../../Shared/ConfigAPI.hpp"
 #include "../../Shared/DriverAPI.hpp"
 #include "../../Shared/IntegratorAPI.hpp"
+#include "../../Shared/LightAPI.hpp"
 #include "../../Shared/PhotographerAPI.hpp"
 #include "DataDesc.hpp"
 #include <fstream>
@@ -20,9 +21,11 @@ private:
     unsigned mSampleCount, mSamplePerLaunch, mGenerateRay, mSampleOnePixel;
     Uint2 mFilmSize;
     bool mFiltBadColor;
-    ProgramGroup mMissRad, mMissOcc, mRayGen, mException;
+    ProgramGroup mMissOcc, mRayGen, mException;
     std::shared_ptr<Photographer> mPhotographer;
     std::shared_ptr<Integrator> mIntegrator;
+    std::shared_ptr<EnvironmentLight> mEnv;
+    Data mEnvData;
 
 public:
     explicit FixedSampler(Bus::ModuleInstance& instance) : Driver(instance) {}
@@ -37,7 +40,7 @@ public:
             const ModuleDesc& mod =
                 helper->getModuleManager()->getModuleFromFile(
                     modulePath().parent_path() / "Kernel.ptx");
-            OptixProgramGroupDesc desc[4] = {};
+            OptixProgramGroupDesc desc[3] = {};
             desc[0].flags = 0;
             desc[0].kind = OPTIX_PROGRAM_GROUP_KIND_RAYGEN;
             desc[0].raygen.entryFunctionName =
@@ -51,20 +54,15 @@ public:
             desc[1].exception.module = mod.handle.get();
             desc[2].flags = 0;
             desc[2].kind = OPTIX_PROGRAM_GROUP_KIND_MISS;
-            desc[2].miss.entryFunctionName = mod.map("__miss__rad");
+            desc[2].miss.entryFunctionName = mod.map("__miss__occ");
             desc[2].miss.module = mod.handle.get();
-            desc[3].flags = 0;
-            desc[3].kind = OPTIX_PROGRAM_GROUP_KIND_MISS;
-            desc[3].miss.entryFunctionName = mod.map("__miss__occ");
-            desc[3].miss.module = mod.handle.get();
-            OptixProgramGroup groups[4] = {};
+            OptixProgramGroup groups[3] = {};
             OptixProgramGroupOptions opt = {};
             checkOptixError(optixProgramGroupCreate(
-                helper->getContext(), desc, 4, &opt, nullptr, nullptr, groups));
+                helper->getContext(), desc, 3, &opt, nullptr, nullptr, groups));
             mRayGen.reset(groups[0]);
             mException.reset(groups[1]);
-            mMissRad.reset(groups[2]);
-            mMissOcc.reset(groups[3]);
+            mMissOcc.reset(groups[2]);
 
             DriverData res;
             OptixStackSizes size;
@@ -72,30 +70,40 @@ public:
                 optixProgramGroupGetStackSize(mRayGen.get(), &size));
             res.cssRG = size.cssRG;
             checkOptixError(
-                optixProgramGroupGetStackSize(mMissRad.get(), &size));
-            res.cssMSRad = size.cssMS;
-            checkOptixError(
                 optixProgramGroupGetStackSize(mMissOcc.get(), &size));
             res.cssMSOcc = size.cssMS;
             auto pgc = config->attribute("Photographer");
             mPhotographer = system().instantiateByName<Photographer>(
                 pgc->attribute("Plugin")->asString());
+
             CameraData cdata = mPhotographer->init(helper, pgc);
             res.dss = cdata.dss;
             mGenerateRay = helper->addCallable(
                 cdata.group, mPhotographer->prepareFrame(mFilmSize));
+
             auto igc = config->attribute("Integrator");
             mIntegrator = system().instantiateByName<Integrator>(
                 igc->attribute("Plugin")->asString());
             IntegratorData idata = mIntegrator->init(helper, igc);
+
+            auto egc = config->attribute("Environment");
+            mEnv = system().instantiateByName<EnvironmentLight>(
+                egc->attribute("Plugin")->asString());
+            LightData edata = mEnv->init(helper, egc);
+            mEnvData = edata.sbtData;
+
+            res.cssMSRad = edata.css;
             res.cssRG += idata.css;
-            res.dss = std::max(res.dss, idata.dss);
+            res.dss = std::max(edata.dss, std::max(res.dss, idata.dss));
             mSampleOnePixel = helper->addCallable(idata.group, idata.sbtData);
             res.maxTraceDepth = idata.maxTraceDepth;
-            res.maxSampleDim = cdata.maxSampleDim + idata.maxSampleDim;
-            res.group.assign(groups, groups + 4);
+            // TODO:exact call graph like stack size
+            res.maxSampleDim =
+                cdata.maxSampleDim + idata.maxSampleDim + edata.maxSampleDim;
+            res.group.assign(groups, groups + 3);
+            res.group.push_back(edata.group);
             res.size = mFilmSize;
-            res.maxSPP = mSampleCount * mSamplePerLaunch;
+            res.maxSPP = mSampleCount;
             // TODO:own Sampler
             return res;
         }
@@ -129,22 +137,23 @@ public:
             checkCudaError(
                 cuMemsetD16(asPtr(output), 0, sizeof(Vec4) / 16 * filmSize));
             data.outputBuffer = static_cast<Vec4*>(output.get());
+
+            Buffer exceptionSBT = uploadData(
+                helper->getStream(), packEmptySBTRecord(mException.get()));
+            Data missOccSBT = packEmptySBTRecord(mMissOcc.get());
+            std::vector<Data> missSBT;
+            missSBT.emplace_back(mEnvData);
+            missSBT.emplace_back(missOccSBT);
+            unsigned count, stride;
+            CUdeviceptr ptr;
+            Buffer buf = uploadSBTRecords(helper->getStream(), missSBT, ptr,
+                                          stride, count);
+
             for(unsigned beg = 0; beg < realSPP; beg += mSamplePerLaunch) {
                 data.sampleIdxBeg = beg;
                 data.sampleIdxEnd = std::min(beg + mSamplePerLaunch, realSPP);
                 Buffer rayGenSBT = uploadData(
                     helper->getStream(), packSBTRecord(mRayGen.get(), data));
-                Buffer exceptionSBT = uploadData(
-                    helper->getStream(), packEmptySBTRecord(mException.get()));
-                Data missRadSBT = packEmptySBTRecord(mMissRad.get());
-                Data missOccSBT = packEmptySBTRecord(mMissOcc.get());
-                std::vector<Data> missSBT;
-                missSBT.emplace_back(missRadSBT);
-                missSBT.emplace_back(missOccSBT);
-                unsigned count, stride;
-                CUdeviceptr ptr;
-                Buffer buf = uploadSBTRecords(helper->getStream(), missSBT, ptr,
-                                              stride, count);
 
                 helper->doRender([&](OptixShaderBindingTable& table) {
                     table.exceptionRecord = asPtr(exceptionSBT);

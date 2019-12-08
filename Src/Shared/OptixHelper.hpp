@@ -67,6 +67,11 @@ template <typename T>
 Data packSBTRecord(OptixProgramGroup prog, const T& data) {
     Data res(OPTIX_SBT_RECORD_HEADER_SIZE + sizeof(data));
     checkOptixError(optixSbtRecordPackHeader(prog, res.data()));
+    bool nonEmpty = false;
+    for(size_t i = 0; i < OPTIX_SBT_RECORD_HEADER_SIZE && !nonEmpty; ++i)
+        nonEmpty = static_cast<bool>(res[i]);
+    if(!nonEmpty)
+        throw std::logic_error("Empty program group");
     memcpy(res.data() + OPTIX_SBT_RECORD_HEADER_SIZE, &data, sizeof(data));
     return res;
 }
@@ -74,6 +79,11 @@ Data packSBTRecord(OptixProgramGroup prog, const T& data) {
 inline Data packEmptySBTRecord(OptixProgramGroup prog) {
     Data res(OPTIX_SBT_RECORD_HEADER_SIZE);
     checkOptixError(optixSbtRecordPackHeader(prog, res.data()));
+    bool nonEmpty = false;
+    for(size_t i = 0; i < OPTIX_SBT_RECORD_HEADER_SIZE && !nonEmpty; ++i)
+        nonEmpty = static_cast<bool>(res[i]);
+    if(!nonEmpty)
+        throw std::logic_error("Empty program group");
     return res;
 }
 
