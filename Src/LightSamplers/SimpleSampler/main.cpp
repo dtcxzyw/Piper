@@ -19,6 +19,7 @@ public:
         BUS_TRACE_BEG() {
             DataDesc data;
             data.lightNum = static_cast<unsigned>(lightNum);
+            data.invPdf = static_cast<float>(lightNum);
             const ModuleDesc& mod =
                 helper->getModuleManager()->getModuleFromFile(
                     modulePath().parent_path() / "Sampler.ptx");

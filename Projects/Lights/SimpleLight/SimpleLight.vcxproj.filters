@@ -9,8 +9,10 @@
   </ItemGroup>
   <ItemGroup>
     <CustomBuild Include="..\..\..\Src\Lights\SimpleLight\DirLight.cu" />
+    <CustomBuild Include="..\..\..\src\Lights\SimpleLight\Constant.cu" />
   </ItemGroup>
   <ItemGroup>
-    <None Include="..\..\..\src\Lights\SimpleLight\Constant.cu" />
+    <None Include="..\..\..\Src\Lights\SimpleLight\PointLight.cu" />
+    <None Include="..\..\..\Src\Lights\SimpleLight\SpotLight.cu" />
   </ItemGroup>
 </Project>

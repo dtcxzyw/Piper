@@ -239,6 +239,7 @@ void renderImpl(std::shared_ptr<Config> config, const fs::path& scenePath,
         std::shared_ptr<Geometry> root = sys.instantiate<Geometry>(nodeClass);
         root->init(helper.get(), config->attribute("Scene"));
         GeometryData gdata = root->getData();
+        // TODO:camera space accel/light space accel for motion blur
 
         unsigned msdL = 0;
         for(auto&& light : lights) {
@@ -371,6 +372,7 @@ void renderImpl(std::shared_ptr<Config> config, const fs::path& scenePath,
                 BUS_TRACE_BEG() {
                     callBack(mSBT);
                     checkCudaError(cuStreamSynchronize(0));
+                    // TODO:depth dim+atomicAdd/multiAccBuffer
                     checkOptixError(optixLaunch(mPipeline, 0, mParam,
                                                 sizeof(LaunchParam), &mSBT,
                                                 mSize.x, mSize.y, 1));

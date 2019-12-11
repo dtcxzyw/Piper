@@ -3,4 +3,5 @@
 
 struct DataDesc final {
     unsigned lightNum;
+    float invPdf;
 };

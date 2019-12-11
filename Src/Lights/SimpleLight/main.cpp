@@ -18,13 +18,107 @@ public:
         : Light(instance) {}
     void init(PluginHelper helper, std::shared_ptr<Config> cfg) override {
         BUS_TRACE_BEG() {
-            DirLight data;
+            DirLightData data;
             data.lum = cfg->attribute("Lum")->asVec3();
             data.negDir =
                 glm::normalize(-cfg->attribute("Direction")->asVec3());
             const ModuleDesc& mod =
                 helper->getModuleManager()->getModuleFromFile(
                     modulePath().parent_path() / "DirLight.ptx");
+            OptixProgramGroupDesc desc = {};
+            desc.kind = OPTIX_PROGRAM_GROUP_KIND_CALLABLES;
+            desc.callables.moduleCC = mod.handle.get();
+            desc.callables.entryFunctionNameCC =
+                mod.map("__continuation_callable__sample");
+            OptixProgramGroupOptions opt = {};
+            OptixProgramGroup group;
+            checkOptixError(optixProgramGroupCreate(helper->getContext(), &desc,
+                                                    1, &opt, nullptr, nullptr,
+                                                    &group));
+            mProgramGroup.reset(group);
+            mData.sbtData = packSBTRecord(mProgramGroup.get(), data);
+            mData.maxSampleDim = 0;
+            mData.group = group;
+            OptixStackSizes size;
+            checkOptixError(optixProgramGroupGetStackSize(group, &size));
+            mData.css = size.cssCC;
+            mData.dss = 0;
+        }
+        BUS_TRACE_END();
+    }
+    LightData getData() override {
+        return mData;
+    }
+};
+
+class PointLight final : public Light {
+private:
+    ProgramGroup mProgramGroup;
+    LightData mData;
+
+public:
+    explicit PointLight(Bus::ModuleInstance& instance) : Light(instance) {}
+    void init(PluginHelper helper, std::shared_ptr<Config> cfg) override {
+        BUS_TRACE_BEG() {
+            PointLightData data;
+            data.lum = cfg->attribute("Lum")->asVec3();
+            data.pos = cfg->attribute("Position")->asVec3();
+            const ModuleDesc& mod =
+                helper->getModuleManager()->getModuleFromFile(
+                    modulePath().parent_path() / "PointLight.ptx");
+            OptixProgramGroupDesc desc = {};
+            desc.kind = OPTIX_PROGRAM_GROUP_KIND_CALLABLES;
+            desc.callables.moduleCC = mod.handle.get();
+            desc.callables.entryFunctionNameCC =
+                mod.map("__continuation_callable__sample");
+            OptixProgramGroupOptions opt = {};
+            OptixProgramGroup group;
+            checkOptixError(optixProgramGroupCreate(helper->getContext(), &desc,
+                                                    1, &opt, nullptr, nullptr,
+                                                    &group));
+            mProgramGroup.reset(group);
+            mData.sbtData = packSBTRecord(mProgramGroup.get(), data);
+            mData.maxSampleDim = 0;
+            mData.group = group;
+            OptixStackSizes size;
+            checkOptixError(optixProgramGroupGetStackSize(group, &size));
+            mData.css = size.cssCC;
+            mData.dss = 0;
+        }
+        BUS_TRACE_END();
+    }
+    LightData getData() override {
+        return mData;
+    }
+};
+
+class SpotLight final : public Light {
+private:
+    ProgramGroup mProgramGroup;
+    LightData mData;
+
+public:
+    explicit SpotLight(Bus::ModuleInstance& instance) : Light(instance) {}
+    void init(PluginHelper helper, std::shared_ptr<Config> cfg) override {
+        BUS_TRACE_BEG() {
+            SpotLightData data;
+            data.lum = cfg->attribute("Lum")->asVec3();
+            data.pos = cfg->attribute("Position")->asVec3();
+            data.negSpotDir =
+                -glm::normalize(cfg->attribute("SpotDirection")->asVec3());
+            float cutOff = cfg->attribute("CutOff")->asFloat();
+            data.outerCutOff = cfg->getFloat("OuterCutOff", cutOff);
+            cutOff = cosf(glm::radians(cutOff));
+            data.outerCutOff = cosf(glm::radians(data.outerCutOff));
+            if(data.outerCutOff > cutOff)
+                BUS_TRACE_THROW(std::logic_error("Bad cutoff"));
+            if(cutOff - data.outerCutOff < 1e-4f)
+                data.invDelta = 0.0f;
+            else
+                data.invDelta = 1.0f / (cutOff - data.outerCutOff);
+            const ModuleDesc& mod =
+                helper->getModuleManager()->getModuleFromFile(
+                    modulePath().parent_path() / "SpotLight.ptx");
             OptixProgramGroupDesc desc = {};
             desc.kind = OPTIX_PROGRAM_GROUP_KIND_CALLABLES;
             desc.callables.moduleCC = mod.handle.get();
@@ -60,7 +154,7 @@ public:
         : EnvironmentLight(instance) {}
     LightData init(PluginHelper helper, std::shared_ptr<Config> cfg) override {
         BUS_TRACE_BEG() {
-            Constant data;
+            ConstantData data;
             data.lum = cfg->attribute("Lum")->asVec3();
             const ModuleDesc& mod =
                 helper->getModuleManager()->getModuleFromFile(
@@ -108,7 +202,7 @@ public:
     }
     std::vector<Bus::Name> list(Bus::Name api) const override {
         if(api == Light::getInterface())
-            return { "DirectionalLight" };
+            return { "DirectionalLight", "PointLight", "SpotLight" };
         if(api == EnvironmentLight::getInterface())
             return { "ConstantEnvironment" };
         return {};
@@ -116,6 +210,10 @@ public:
     std::shared_ptr<Bus::ModuleFunctionBase> instantiate(Name name) override {
         if(name == "DirectionalLight")
             return std::make_shared<DirectionalLight>(*this);
+        if(name == "PointLight")
+            return std::make_shared<PointLight>(*this);
+        if(name == "SpotLight")
+            return std::make_shared<SpotLight>(*this);
         if(name == "ConstantEnvironment")
             return std::make_shared<ConstantEnvironment>(*this);
         return nullptr;

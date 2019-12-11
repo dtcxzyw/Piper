@@ -10,6 +10,7 @@
 #define INLINEDEVICE __inline__ __device__
 
 constexpr float eps = 1e-8f;
+constexpr float oneMinusEps = 0.9999999f;
 
 constexpr unsigned radianceMiss = 0;
 constexpr unsigned occlusionMiss = 1;

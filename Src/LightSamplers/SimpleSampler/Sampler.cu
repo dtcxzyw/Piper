@@ -4,7 +4,8 @@
 DEVICE LightSample __continuation_callable__sample(const Vec3& pos,
                                                    float rayTime,
                                                    SamplerContext& sampler) {
-    unsigned num = getSBTData<DataDesc>()->lightNum;
+    auto data = getSBTData<DataDesc>();
+    unsigned num = data->lightNum;
     if(num == 0) {
         LightSample res;
         res.rad = Spectrum{ 0.0f };
@@ -12,8 +13,10 @@ DEVICE LightSample __continuation_callable__sample(const Vec3& pos,
     }
     unsigned id = static_cast<unsigned>(num * sampler());
     id = glm::clamp(id, 0U, num - 1U);
-    return sampleOneLightImpl(launchParam.lightSbtOffset + id, pos, rayTime,
-                              sampler);
+    LightSample res = sampleOneLightImpl(launchParam.lightSbtOffset + id, pos,
+                                         rayTime, sampler);
+    res.rad *= data->invPdf;
+    return res;
 }
 
 void check(LightSampleFunction = __continuation_callable__sample);
