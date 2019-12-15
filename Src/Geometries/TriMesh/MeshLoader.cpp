@@ -1,5 +1,6 @@
 #include "MeshAPI.hpp"
 #include <fstream>
+#include <sstream>
 #pragma warning(push, 0)
 #include <lz4.h>
 #pragma warning(pop)
@@ -94,11 +95,13 @@ public:
                     asPtr(mIndexBuf), data.data() + offset, siz, stream));
                 offset += siz;
             }
-            reporter().apply(ReportLevel::Info,
-                             "Loaded " + std::to_string(mVertexSize) +
-                                 " vertexes," + std::to_string(mIndexSize) +
-                                 " faces.",
-                             BUS_DEFSRCLOC());
+            std::stringstream ss;
+            ss << std::boolalpha << "Loaded " << mVertexSize << " vertexes,"
+               << mIndexSize << " faces."
+               << "(hasNormal=" << static_cast<bool>(flag & 1)
+               << ",hasTexCoord=" << static_cast<bool>(flag & 2) << ")"
+               << std::endl;
+            reporter().apply(ReportLevel::Info, ss.str(), BUS_DEFSRCLOC());
         }
         BUS_TRACE_END();
     }

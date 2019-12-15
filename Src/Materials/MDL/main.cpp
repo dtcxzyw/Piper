@@ -41,7 +41,8 @@ struct Context final {
 
 Context getContext(Bus::ModuleInstance& inst);
 
-// TODO:EDF and Automatic derivatives Support
+// TODO:EDF
+// TODO:Automatic derivatives Support
 class MDLMaterial final : public Material {
 private:
     Buffer mArgData;
@@ -97,6 +98,16 @@ public:
             Handle<const MDL::ITarget_code> code(backend->translate_material_df(
                 context.transaction, mat.get(), "surface.scattering", "bsdf",
                 context.execContext.get()));
+
+            for(mi::Size i = 0; i < code->get_texture_count(); ++i) {
+                printf("texture=%s url=%s\n", code->get_texture(i),
+                       code->get_texture_url(i));
+                Handle<const MDL::ITexture> tex(
+                    context.transaction->access<const MDL::ITexture>(
+                        code->get_texture_url(i)));
+                tex->get_image()
+            }
+
             OptixProgramGroupDesc desc = {};
             desc.flags = 0;
             desc.kind = OPTIX_PROGRAM_GROUP_KIND_CALLABLES;
@@ -122,20 +133,32 @@ public:
                 CHECKUSAGE(Usage::SU_TEXTURE_TANGENTS);
                 CHECKUSAGE(Usage::SU_TRANSFORMS);
 #undef CHECKUSAGE
-                reporter().apply(ReportLevel::Debug, "Usage:" + msg,
+                reporter().apply(ReportLevel::Debug, "Usage:\n" + msg,
                                  BUS_DEFSRCLOC());
             }
             BUS_TRACE_POINT();
             // TODO:link PTX
             auto samplePTX = loadPTX(modulePath().parent_path() / "Kernel.ptx");
             std::string mdlPTX = code->get_code();
+            // remove .extern
+            while(true) {
+                size_t pos = mdlPTX.find(".extern .func");
+                if(pos == mdlPTX.npos)
+                    break;
+                size_t end = mdlPTX.find(';', pos);
+                mdlPTX = mdlPTX.substr(0, pos) + mdlPTX.substr(end + 1);
+            }
             mdlPTX = mdlPTX.substr(mdlPTX.find(".address_size") + 16);
             auto header =
                 samplePTX.substr(0, samplePTX.find(".address_size") + 16);
-            auto kernel = samplePTX.substr(
-                samplePTX.find(".extern .const .align 8 .b8 launchParam[16]"));
-            // BUG:not support printf
-            auto finalPTX = header + mdlPTX + kernel;
+            auto funcDef = samplePTX.substr(
+                samplePTX.find(".extern .const .align 8 .b8 launchParam[16];"));
+            size_t cutPos =
+                funcDef.find(".visible .func __continuation_callable__sample");
+            auto texFunc = funcDef.substr(0, cutPos);
+            auto kernel = funcDef.substr(cutPos);
+            // BUG:doesn't support printf
+            auto finalPTX = header + '\n' + texFunc + mdlPTX + kernel;
             // reporter().apply(ReportLevel::Debug, finalPTX, BUS_DEFSRCLOC());
             std::hash<std::string> hasher;
             const ModuleDesc& mod = helper->getModuleManager()->getModule(

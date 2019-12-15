@@ -96,19 +96,19 @@ INLINEDEVICE void store_result1(float* res, float s) {
 #define WRAP_AND_CROP_OR_RETURN_BLACK(val, inv_dim, wrap_mode, crop_vals,   \
                                       store_res_func)                       \
     do {                                                                    \
-        if((wrap_mode) == mi::neuraylib::TEX_WRAP_REPEAT &&                 \
+        if((wrap_mode) == MDL::TEX_WRAP_REPEAT &&                 \
            (crop_vals)[0] == 0.0f && (crop_vals)[1] == 1.0f) {              \
             /* Do nothing, use texture sampler default behavior */          \
         } else {                                                            \
-            if((wrap_mode) == mi::neuraylib::TEX_WRAP_REPEAT)               \
+            if((wrap_mode) == MDL::TEX_WRAP_REPEAT)               \
                 val = val - floorf(val);                                    \
             else {                                                          \
-                if((wrap_mode) == mi::neuraylib::TEX_WRAP_CLIP &&           \
+                if((wrap_mode) == MDL::TEX_WRAP_CLIP &&           \
                    (val < 0.0f || val >= 1.0f)) {                           \
                     store_res_func(result, 0.0f);                           \
                     return;                                                 \
                 } else if((wrap_mode) ==                                    \
-                          mi::neuraylib::TEX_WRAP_MIRRORED_REPEAT) {        \
+                          MDL::TEX_WRAP_MIRRORED_REPEAT) {        \
                     float floored_val = floorf(val);                        \
                     if((int(floored_val) & 1) != 0)                         \
                         val = 1.0f - (val - floored_val);                   \
@@ -954,11 +954,11 @@ DEVICE void df_bsdf_measurement_albedos(
         return;  // invalid MBSDF returns zero
 
     df_bsdf_measurement_albedo(&result[0], self, bsdf_measurement_index,
-                               theta_phi, mi::neuraylib::MBSDF_DATA_REFLECTION);
+                               theta_phi, MDL::MBSDF_DATA_REFLECTION);
 
     df_bsdf_measurement_albedo(&result[2], self, bsdf_measurement_index,
                                theta_phi,
-                               mi::neuraylib::MBSDF_DATA_TRANSMISSION);
+                               MDL::MBSDF_DATA_TRANSMISSION);
 }
 
 DEVICE void __continuation_callable__sample(Payload* payload, Vec3 dir,
@@ -968,7 +968,7 @@ DEVICE void __continuation_callable__sample(Payload* payload, Vec3 dir,
     auto data = getSBTData<DataDesc>();
     SamplerContext& sampler = *payload->sampler;
     MDL::Shading_state_material mat;
-    ns = ng;
+
     mat.normal = v2f(ns);
     mat.geom_normal = v2f(ng);
     mat.position = v2f(hit);

@@ -1,4 +1,5 @@
 #pragma once
+// TODO:include\cuda\std
 #define __int32 int
 #define __int64 long long
 #define _NODISCARD
@@ -101,10 +102,10 @@ using std::uint64_t;
 #define INFINITY ((float)(_HUGE_ENUF * _HUGE_ENUF))
 #define HUGE_VAL ((double)INFINITY)
 #define HUGE_VALF ((float)INFINITY)
-#define __builtin_huge_val()  HUGE_VAL
-#define __builtin_huge_valf()  HUGE_VALF 
+#define __builtin_huge_val() HUGE_VAL
+#define __builtin_huge_valf() HUGE_VALF
 #define __builtin_nan nan
-#define __builtin_nanf  nanf 
+#define __builtin_nanf nanf
 #define __builtin_nans nan
 #define __builtin_nansf nanf
 #include "../Shared/KernelShared.hpp"

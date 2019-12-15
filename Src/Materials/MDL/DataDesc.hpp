@@ -2,7 +2,6 @@
 #include "../../Shared/Shared.hpp"
 #pragma warning(push, 0)
 #include <mi/mdl_sdk.h>
-#include <texture_types.h>
 #include <vector_functions.hpp>
 #pragma warning(pop)
 namespace MDL = mi::neuraylib;
@@ -21,18 +20,16 @@ using MDL::Texture_handler_base;
 // Custom structure representing an MDL texture, containing filtered and
 // unfiltered CUDA texture objects and the size of the texture.
 struct Texture final {
-    cudaTextureObject_t
-        filtered_object;  // uses filter mode cudaFilterModeLinear
-    cudaTextureObject_t
-        unfiltered_object;  // uses filter mode cudaFilterModePoint
-    uint3 size;             // size of the texture, needed for texel access
-    float3 inv_size;        // the inverse values of the size of the texture
+    CUtexObject filtered_object;    // uses filter mode cudaFilterModeLinear
+    CUtexObject unfiltered_object;  // uses filter mode cudaFilterModePoint
+    uint3 size;       // size of the texture, needed for texel access
+    float3 inv_size;  // the inverse values of the size of the texture
 };
 
 // Custom structure representing an MDL BSDF measurement.
 struct Mbsdf {
     unsigned has_data[2];  // true if there is a measurement for this part
-    cudaTextureObject_t eval_data[2];  // uses filter mode cudaFilterModeLinear
+    CUtexObject eval_data[2];  // uses filter mode cudaFilterModeLinear
     float max_albedo[2];    // max albedo used to limit the multiplier
     float* sample_data[2];  // CDFs for sampling a BSDF measurement
     float* albedo_data[2];  // max albedo for each theta (isotropic)
@@ -60,7 +57,7 @@ struct Lightprofile {
     float candela_multiplier;    // factor to rescale the normalized data
     float total_power;
 
-    cudaTextureObject_t eval_data;  // normalized data sampled on grid
+    CUtexObject eval_data;  // normalized data sampled on grid
     float* cdf_data;                // CDFs for sampling a light profile
 };
 

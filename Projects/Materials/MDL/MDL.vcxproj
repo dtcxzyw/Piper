@@ -83,6 +83,7 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="..\..\..\Src\Materials\MDL\CUDAHelper.cpp" />
     <ClCompile Include="..\..\..\Src\Materials\MDL\main.cpp" />
     <ClCompile Include="..\..\..\Src\Materials\MDL\MDLBase.cpp" />
     <ClCompile Include="..\..\..\Src\ThirdParty\Bus\BusImpl.cpp" />

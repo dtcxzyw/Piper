@@ -4,6 +4,7 @@
     <ClCompile Include="..\..\..\Src\ThirdParty\Bus\BusImpl.cpp" />
     <ClCompile Include="..\..\..\Src\Materials\MDL\main.cpp" />
     <ClCompile Include="..\..\..\Src\Materials\MDL\MDLBase.cpp" />
+    <ClCompile Include="..\..\..\Src\Materials\MDL\CUDAHelper.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\..\..\Src\Materials\MDL\MDLShared.hpp" />
