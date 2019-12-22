@@ -211,7 +211,7 @@ void renderImpl(std::shared_ptr<Config> config, const fs::path& scenePath,
         PCO.traversableGraphFlags = OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_ANY;
         // TODO:motion blur
         PCO.usesMotionBlur = false;
-        // TODO:configurable attribute
+        // TODO:customizable attribute
         PCO.numAttributeValues = 2;
         PCO.numPayloadValues = 2;
         std::set<OptixProgramGroup> groups;

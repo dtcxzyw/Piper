@@ -1,6 +1,89 @@
 #include "../../Shared/KernelShared.hpp"
 #include "DataDesc.hpp"
 
+#pragma warning(push, 0)
+#include <mi/mdl_sdk.h>
+#include <vector_functions.hpp>
+#pragma warning(pop)
+namespace MDL = mi::neuraylib;
+
+// From examples/mdl_sdk/shared/texture_support_cuda.h
+
+#ifndef M_PI
+#define M_PI 3.14159265358979323846
+#endif
+#define M_ONE_OVER_PI 0.318309886183790671538
+
+using MDL::Mbsdf_part;
+using MDL::Tex_wrap_mode;
+using MDL::Texture_handler_base;
+
+// Custom structure representing an MDL texture, containing filtered and
+// unfiltered CUDA texture objects and the size of the texture.
+struct Texture final {
+    CUtexObject filtered_object;    // uses filter mode cudaFilterModeLinear
+    CUtexObject unfiltered_object;  // uses filter mode cudaFilterModePoint
+    uint3 size;       // size of the texture, needed for texel access
+    float3 inv_size;  // the inverse values of the size of the texture
+};
+
+// Custom structure representing an MDL BSDF measurement.
+struct Mbsdf {
+    unsigned has_data[2];      // true if there is a measurement for this part
+    CUtexObject eval_data[2];  // uses filter mode cudaFilterModeLinear
+    float max_albedo[2];       // max albedo used to limit the multiplier
+    float* sample_data[2];     // CDFs for sampling a BSDF measurement
+    float* albedo_data[2];     // max albedo for each theta (isotropic)
+
+    uint2
+        angular_resolution[2];  // size of the dataset, needed for texel access
+    float2 inv_angular_resolution[2];  // the inverse values of the size of the
+                                       // dataset
+    unsigned num_channels[2];          // number of color channels (1 or 3)
+};
+
+// Structure representing a Light Profile
+struct Lightprofile {
+    __device__ explicit Lightprofile()
+        : angular_resolution(make_uint2(0, 0)),
+          theta_phi_start(make_float2(0.0f, 0.0f)),
+          theta_phi_delta(make_float2(0.0f, 0.0f)),
+          theta_phi_inv_delta(make_float2(0.0f, 0.0f)),
+          candela_multiplier(0.0f), total_power(0.0f), eval_data(0) {}
+
+    uint2 angular_resolution;    // angular resolution of the grid
+    float2 theta_phi_start;      // start of the grid
+    float2 theta_phi_delta;      // angular step size
+    float2 theta_phi_inv_delta;  // inverse step size
+    float candela_multiplier;    // factor to rescale the normalized data
+    float total_power;
+
+    CUtexObject eval_data;  // normalized data sampled on grid
+    float* cdf_data;        // CDFs for sampling a light profile
+};
+
+// The texture handler structure required by the MDL SDK with custom additional
+// fields.
+struct Texture_handler : MDL::Texture_handler_base {
+    // additional data for the texture access functions can be provided here
+
+    size_t num_textures;      // the number of textures used by the material
+                              // (without the invalid texture)
+    Texture const* textures;  // the textures used by the material
+                              // (without the invalid texture)
+
+    size_t num_mbsdfs;    // the number of mbsdfs used by the material
+                          // (without the invalid mbsdf)
+    Mbsdf const* mbsdfs;  // the mbsdfs used by the material
+                          // (without the invalid mbsdf)
+
+    size_t num_lightprofiles;  // number of elements in the lightprofiles field
+                               // (without the invalid light profile)
+    Lightprofile const*
+        lightprofiles;  // a device pointer to a list of mbsdfs objects, if used
+                        // (without the invalid light profile)
+};
+
 DEVICE void bsdf_init(MDL::Shading_state_material* state,
                       const MDL::Resource_data* res_data,
                       const void* exception_state, const char* arg_block_data);
@@ -96,19 +179,18 @@ INLINEDEVICE void store_result1(float* res, float s) {
 #define WRAP_AND_CROP_OR_RETURN_BLACK(val, inv_dim, wrap_mode, crop_vals,   \
                                       store_res_func)                       \
     do {                                                                    \
-        if((wrap_mode) == MDL::TEX_WRAP_REPEAT &&                 \
-           (crop_vals)[0] == 0.0f && (crop_vals)[1] == 1.0f) {              \
+        if((wrap_mode) == MDL::TEX_WRAP_REPEAT && (crop_vals)[0] == 0.0f && \
+           (crop_vals)[1] == 1.0f) {                                        \
             /* Do nothing, use texture sampler default behavior */          \
         } else {                                                            \
-            if((wrap_mode) == MDL::TEX_WRAP_REPEAT)               \
+            if((wrap_mode) == MDL::TEX_WRAP_REPEAT)                         \
                 val = val - floorf(val);                                    \
             else {                                                          \
-                if((wrap_mode) == MDL::TEX_WRAP_CLIP &&           \
+                if((wrap_mode) == MDL::TEX_WRAP_CLIP &&                     \
                    (val < 0.0f || val >= 1.0f)) {                           \
                     store_res_func(result, 0.0f);                           \
                     return;                                                 \
-                } else if((wrap_mode) ==                                    \
-                          MDL::TEX_WRAP_MIRRORED_REPEAT) {        \
+                } else if((wrap_mode) == MDL::TEX_WRAP_MIRRORED_REPEAT) {   \
                     float floored_val = floorf(val);                        \
                     if((int(floored_val) & 1) != 0)                         \
                         val = 1.0f - (val - floored_val);                   \
@@ -957,15 +1039,33 @@ DEVICE void df_bsdf_measurement_albedos(
                                theta_phi, MDL::MBSDF_DATA_REFLECTION);
 
     df_bsdf_measurement_albedo(&result[2], self, bsdf_measurement_index,
-                               theta_phi,
-                               MDL::MBSDF_DATA_TRANSMISSION);
+                               theta_phi, MDL::MBSDF_DATA_TRANSMISSION);
 }
+
+struct Target_code_data {
+    size_t num_textures;  // number of elements in the textures field
+    CUdeviceptr
+        textures;  // a device pointer to a list of Texture objects, if used
+
+    size_t num_mbsdfs;  // number of elements in the mbsdfs field
+    CUdeviceptr
+        mbsdfs;  // a device pointer to a list of mbsdfs objects, if used
+
+    size_t num_lightprofiles;  // number of elements in the lightprofiles field
+    CUdeviceptr
+        lightprofiles;  // a device pointer to a list of mbsdfs objects, if used
+
+    CUdeviceptr ro_data_segment;  // a device pointer to the read-only data
+                                  // segment, if used
+};
 
 DEVICE void __continuation_callable__sample(Payload* payload, Vec3 dir,
                                             Vec3 hit, Vec3 ng, Vec3 ns,
                                             Vec2 texCoord, float rayTime,
                                             bool front) {
     auto data = getSBTData<DataDesc>();
+    const Target_code_data* resource =
+        reinterpret_cast<Target_code_data*>(data->resource);
     SamplerContext& sampler = *payload->sampler;
     MDL::Shading_state_material mat;
 
@@ -973,7 +1073,9 @@ DEVICE void __continuation_callable__sample(Payload* payload, Vec3 dir,
     mat.geom_normal = v2f(ng);
     mat.position = v2f(hit);
     mat.animation_time = rayTime;
-    mat.text_coords = nullptr;  // TODO:texCoords
+    MDL::tct_float3 tex;
+    tex.x = texCoord.x, tex.y = texCoord.y, tex.z = 0.0f;
+    mat.text_coords = &tex;  // TODO:texCoords
     // fake tangent
     float3 tu, tv;
     {
@@ -985,12 +1087,21 @@ DEVICE void __continuation_callable__sample(Payload* payload, Vec3 dir,
     }
     mat.tangent_u = &tu;  // TODO:tangent
     mat.tangent_v = &tv;
-    mat.text_results = nullptr;     // TODO:reserve text_results
-    mat.ro_data_segment = nullptr;  // TODO:enable_ro_segment
+    mat.text_results = nullptr;  // TODO:reserve text_results
+    mat.ro_data_segment = reinterpret_cast<char*>(resource->ro_data_segment);
     mat.world_to_object = nullptr;
     mat.object_to_world = nullptr;  // TODO:transform
     mat.object_id = 0;              // TODO:instance
+
     Texture_handler handler;
+    handler.lightprofiles =
+        reinterpret_cast<Lightprofile*>(resource->lightprofiles);
+    handler.num_lightprofiles = resource->num_lightprofiles;
+    handler.mbsdfs = reinterpret_cast<Mbsdf*>(resource->mbsdfs);
+    handler.num_mbsdfs = resource->num_mbsdfs;
+    handler.textures = reinterpret_cast<Texture*>(resource->textures);
+    handler.num_textures = resource->num_textures;
+
     MDL::Resource_data resData;
     resData.shared_data = nullptr;
     resData.texture_handler = &handler;

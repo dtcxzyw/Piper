@@ -23,31 +23,25 @@ static std::string loadPTX(const fs::path& path) {
     BUS_TRACE_END();
 }
 
-struct Context final {
-    Bus::Reporter& reporter;
-    MDL::IMdl_compiler* compiler;
-    MDL::ITransaction* transaction;
-    MDL::IMdl_factory* factory;
-    Handle<MDL::IMdl_execution_context> execContext;
-    Context(Bus::Reporter& reporter, MDL::IMdl_compiler* compiler,
-            MDL::ITransaction* transaction, MDL::IMdl_factory* factory,
-            MDL::IMdl_execution_context* execContext)
-        : reporter(reporter), compiler(compiler), transaction(transaction),
-          factory(factory), execContext(execContext) {}
-    ~Context() {
-        printMessages(reporter, execContext.get());
-    }
+Context getContext(Bus::ModuleInstance& inst);
+
+class MDLCUDAHelper : private Unmoveable {
+public:
+    virtual std::string genPTX() = 0;
+    virtual DataDesc getData() = 0;
+    virtual mi::Uint32 getUsage() = 0;
 };
 
-Context getContext(Bus::ModuleInstance& inst);
+std::shared_ptr<MDLCUDAHelper>
+getHelper(Context& context, const std::string& module, const std::string& mat);
 
 // TODO:EDF
 // TODO:Automatic derivatives Support
 class MDLMaterial final : public Material {
 private:
-    Buffer mArgData;
     ProgramGroup mGroup;
     MaterialData mData;
+    std::shared_ptr<MDLCUDAHelper> mHelper;
 
 public:
     explicit MDLMaterial(Bus::ModuleInstance& instance) : Material(instance) {}
@@ -55,65 +49,15 @@ public:
         BUS_TRACE_BEG() {
             auto moduleName = config->attribute("Module")->asString();
             auto materialName = config->attribute("Material")->asString();
-            auto context = getContext(mInstance);
-            checkMDLErrorNNG(context.compiler->load_module(
-                context.transaction, moduleName.c_str(),
-                context.execContext.get()));
-            moduleName = "mdl" + moduleName;
             materialName = moduleName + "::" + materialName;
-            Handle<const MDL::IMaterial_definition> def{
-                context.transaction->access<MDL::IMaterial_definition>(
-                    materialName.c_str())
-            };
-            if(!def.is_valid_interface())
-                BUS_TRACE_THROW(std::logic_error("No material named \"" +
-                                                 materialName + "\""));
+            auto context = getContext(mInstance);
             BUS_TRACE_POINT();
-            Handle<MDL::IValue_factory> valueFactory{
-                context.factory->create_value_factory(context.transaction)
-            };
-            Handle<MDL::IExpression_factory> exprFactory{
-                context.factory->create_expression_factory(context.transaction)
-            };
-            mi::Sint32 ret = 0;
             // TODO:arguments
-            Handle<MDL::IMaterial_instance> inst{ def->create_material_instance(
-                nullptr, &ret) };
-            if(ret != 0)
-                BUS_TRACE_THROW(std::runtime_error(
-                    "Failed to create material instance. error code=" +
-                    std::to_string(ret)));
-            // TODO:class compilation
-            mi::Uint32 flags = MDL::IMaterial_instance::DEFAULT_OPTIONS;
-            Handle<MDL::ICompiled_material> mat{ inst->create_compiled_material(
-                flags, context.execContext.get()) };
-            Handle<MDL::IMdl_backend> backend{ context.compiler->get_backend(
-                MDL::IMdl_compiler::MB_CUDA_PTX) };
-            checkMDLErrorEQ(backend->set_option("num_texture_results", "0"));
-            checkMDLErrorEQ(
-                backend->set_option("tex_lookup_call_mode", "direct_call"));
-            // TODO:enable_ro_segment
-            // TODO:translate path
-            BUS_TRACE_POINT();
-            Handle<const MDL::ITarget_code> code(backend->translate_material_df(
-                context.transaction, mat.get(), "surface.scattering", "bsdf",
-                context.execContext.get()));
+            mHelper = getHelper(context, moduleName, materialName);
 
-            for(mi::Size i = 0; i < code->get_texture_count(); ++i) {
-                printf("texture=%s url=%s\n", code->get_texture(i),
-                       code->get_texture_url(i));
-                Handle<const MDL::ITexture> tex(
-                    context.transaction->access<const MDL::ITexture>(
-                        code->get_texture_url(i)));
-                tex->get_image()
-            }
-
-            OptixProgramGroupDesc desc = {};
-            desc.flags = 0;
-            desc.kind = OPTIX_PROGRAM_GROUP_KIND_CALLABLES;
             // TODO:render state usage
             {
-                auto usage = code->get_render_state_usage();
+                auto usage = mHelper->getUsage();
                 std::string msg;
                 using Usage = MDL::ITarget_code::State_usage_property;
 #define CHECKUSAGE(x) \
@@ -136,10 +80,14 @@ public:
                 reporter().apply(ReportLevel::Debug, "Usage:\n" + msg,
                                  BUS_DEFSRCLOC());
             }
+
+            OptixProgramGroupDesc desc = {};
+            desc.flags = 0;
+            desc.kind = OPTIX_PROGRAM_GROUP_KIND_CALLABLES;
             BUS_TRACE_POINT();
             // TODO:link PTX
             auto samplePTX = loadPTX(modulePath().parent_path() / "Kernel.ptx");
-            std::string mdlPTX = code->get_code();
+            std::string mdlPTX = mHelper->genPTX();
             // remove .extern
             while(true) {
                 size_t pos = mdlPTX.find(".extern .func");
@@ -176,19 +124,7 @@ public:
                                                     1, &opt, nullptr, nullptr,
                                                     &group));
             mGroup.reset(group);
-            // All DF_* functions of one material DF use the same target
-            // argument block.
-            auto argID = code->get_callable_function_argument_block_index(0);
-            if(argID != ~mi::Size(0)) {
-                Handle<const MDL::ITarget_argument_block> argBlock{
-                    code->get_argument_block(argID)
-                };
-                mArgData =
-                    uploadData(0, argBlock->get_data(), argBlock->get_size());
-                checkCudaError(cuStreamSynchronize(0));
-            }
-            DataDesc data;
-            data.argData = static_cast<const char*>(mArgData.get());
+            DataDesc data = mHelper->getData();
             mData.group = group;
             mData.maxSampleDim = 3;
             mData.radData = packSBTRecord(group, data);
@@ -205,6 +141,7 @@ public:
 };
 
 // TODO:set ILogger
+// TODO:use IImage_api for image I/O
 class Instance final : public Bus::ModuleInstance {
 private:
     HMODULE mHandle;
@@ -300,8 +237,8 @@ public:
         return nullptr;
     }
     Context getContext() {
-        return Context(getSystem().getReporter(), mCompiler.get(),
-                       mTransaction.get(), mFactory.get(),
+        return Context(getSystem().getReporter(), mNeuray.get(),
+                       mCompiler.get(), mTransaction.get(), mFactory.get(),
                        mFactory->create_execution_context());
     }
 };

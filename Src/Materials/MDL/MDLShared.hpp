@@ -36,3 +36,22 @@ void printMessages(Bus::Reporter& reporter,
 MDL::INeuray* MDLInit(HMODULE& handle, const fs::path& path,
                       Bus::Reporter& reporter);
 void MDLUninit(HMODULE handle, Bus::Reporter& reporter);
+
+struct Context final {
+    Bus::Reporter& reporter;
+    MDL::INeuray* neuary;
+    MDL::IMdl_compiler* compiler;
+    MDL::ITransaction* transaction;
+    MDL::IMdl_factory* factory;
+    Handle<MDL::IMdl_execution_context> execContext;
+    Context(Bus::Reporter& reporter, MDL::INeuray* neuary,
+            MDL::IMdl_compiler* compiler, MDL::ITransaction* transaction,
+            MDL::IMdl_factory* factory,
+            MDL::IMdl_execution_context* execContext)
+        : reporter(reporter), neuary(neuary), compiler(compiler),
+          transaction(transaction), factory(factory), execContext(execContext) {
+    }
+    ~Context() {
+        printMessages(reporter, execContext.get());
+    }
+};

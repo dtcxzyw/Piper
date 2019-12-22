@@ -10,9 +10,6 @@
 #include <sstream>
 #include <string>
 #include <vector>
-#pragma warning(push, 0)
-//#include <vector_functions.hpp>
-#pragma warning(pop)
 
 BUS_MODULE_NAME("Piper.BuiltinMaterial.MDL.CUDAHelper");
 
@@ -446,8 +443,7 @@ private:
     std::vector<size_t> m_bsdf_arg_block_indices;
 
     // List of all target argument block layouts.
-    std::vector<Handle<MDL::ITarget_value_layout const>>
-        m_arg_block_layouts;
+    std::vector<Handle<MDL::ITarget_value_layout const>> m_arg_block_layouts;
 
     // List of all Texture objects owned by this context.
     Resource_container<Texture> m_all_textures;
@@ -486,12 +482,20 @@ CUdeviceptr Material_gpu_context::get_device_target_argument_block_list() {
 // Copy the image data of a canvas to a CUDA array.
 void Material_gpu_context::copy_canvas_to_cuda_array(
     CUarray device_array, MDL::ICanvas const* canvas) {
-    Handle<const MDL::ITile> tile(canvas->get_tile(0, 0));
-    mi::Float32 const* data = static_cast<mi::Float32 const*>(tile->get_data());
-    checkCudaError(cuMemcpyHtoA(device_array, 0, data,
-                                canvas->get_resolution_x() *
-                                    canvas->get_resolution_y() * sizeof(float) *
-                                    4));
+    BUS_TRACE_BEG() {
+        Handle<const MDL::ITile> tile(canvas->get_tile(0, 0));
+        mi::Float32 const* data =
+            static_cast<mi::Float32 const*>(tile->get_data());
+        CUDA_MEMCPY2D copyParam = {};
+        copyParam.WidthInBytes = canvas->get_resolution_x() * 4 * sizeof(float);
+        copyParam.Height = canvas->get_resolution_y();
+        copyParam.srcHost = data;
+        copyParam.srcMemoryType = CU_MEMORYTYPE_HOST;
+        copyParam.dstArray = device_array;
+        copyParam.dstMemoryType = CU_MEMORYTYPE_ARRAY;
+        checkCudaError(cuMemcpy2D(&copyParam));
+    }
+    BUS_TRACE_END();
 }
 
 // Prepare the texture identified by the texture_index for use by the texture
@@ -504,9 +508,8 @@ void Material_gpu_context::prepare_texture(MDL::ITransaction* transaction,
     BUS_TRACE_BEG() {
         // Get access to the texture data by the texture database name from the
         // target code.
-        Handle<const MDL::ITexture> texture(
-            transaction->access<MDL::ITexture>(
-                code_ptx->get_texture(texture_index)));
+        Handle<const MDL::ITexture> texture(transaction->access<MDL::ITexture>(
+            code_ptx->get_texture(texture_index)));
         Handle<const MDL::IImage> image(
             transaction->access<MDL::IImage>(texture->get_image()));
         Handle<const MDL::ICanvas> canvas(image->get_canvas());
@@ -544,7 +547,9 @@ void Material_gpu_context::prepare_texture(MDL::ITransaction* transaction,
             canvas = image_api->convert(canvas.get(), "Color");
         }
 
-        CUDA_RESOURCE_DESC res_desc;
+        BUS_TRACE_POINT();
+
+        CUDA_RESOURCE_DESC res_desc = {};
         memset(&res_desc, 0, sizeof(res_desc));
 
         // Copy image data to GPU array depending on texture shape
@@ -562,7 +567,7 @@ void Material_gpu_context::prepare_texture(MDL::ITransaction* transaction,
             }
 
             // Allocate a 3D array on the GPU
-            CUDA_ARRAY3D_DESCRIPTOR arrayDesc;
+            CUDA_ARRAY3D_DESCRIPTOR arrayDesc = {};
             arrayDesc.Width = tex_width;
             arrayDesc.Height = tex_height;
             arrayDesc.Depth = tex_layers;
@@ -575,8 +580,10 @@ void Material_gpu_context::prepare_texture(MDL::ITransaction* transaction,
             CUarray device_tex_array;
             checkCudaError(cuArray3DCreate(&device_tex_array, &arrayDesc));
 
+            BUS_TRACE_POINT();
+
             // Prepare the memcpy parameter structure
-            CUDA_MEMCPY3D copy_params;
+            CUDA_MEMCPY3D copy_params = {};
             memset(&copy_params, 0, sizeof(copy_params));
             copy_params.dstArray = device_tex_array;
             copy_params.WidthInBytes = tex_width * 4 * sizeof(float);
@@ -588,8 +595,7 @@ void Material_gpu_context::prepare_texture(MDL::ITransaction* transaction,
             // Copy the image data of all layers (the layers are not
             // consecutive in memory)
             for(mi::Uint32 layer = 0; layer < tex_layers; ++layer) {
-                Handle<const MDL::ITile> tile(
-                    canvas->get_tile(0, 0, layer));
+                Handle<const MDL::ITile> tile(canvas->get_tile(0, 0, layer));
                 float const* data = static_cast<float const*>(tile->get_data());
 
                 /*
@@ -611,7 +617,7 @@ void Material_gpu_context::prepare_texture(MDL::ITransaction* transaction,
         } else if(m_enable_derivatives) {
             // mipmapped textures use CUDA mipmapped arrays
             mi::Uint32 num_levels = image->get_levels();
-            CUDA_ARRAY3D_DESCRIPTOR arrayDesc;
+            CUDA_ARRAY3D_DESCRIPTOR arrayDesc = {};
             arrayDesc.Width = tex_width;
             arrayDesc.Height = tex_height;
             arrayDesc.Depth = 0;
@@ -621,7 +627,7 @@ void Material_gpu_context::prepare_texture(MDL::ITransaction* transaction,
             CUmipmappedArray device_tex_miparray;
             checkCudaError(cuMipmappedArrayCreate(&device_tex_miparray,
                                                   &arrayDesc, num_levels));
-
+            BUS_TRACE_POINT();
             // create all mipmap levels and copy them to the CUDA arrays in the
             // mipmapped array
             Handle<mi::IArray> mipmaps(
@@ -643,19 +649,23 @@ void Material_gpu_context::prepare_texture(MDL::ITransaction* transaction,
                                           level_canvas.get());
             }
 
+            BUS_TRACE_POINT();
+
             res_desc.resType = CU_RESOURCE_TYPE_MIPMAPPED_ARRAY;
             res_desc.res.mipmap.hMipmappedArray = device_tex_miparray;
 
             m_all_texture_mipmapped_arrays->push_back(device_tex_miparray);
         } else {
             // 2D texture objects use CUDA arrays
-            CUDA_ARRAY_DESCRIPTOR arrayDesc;
+            CUDA_ARRAY_DESCRIPTOR arrayDesc = {};
             arrayDesc.Width = tex_width;
             arrayDesc.Height = tex_height;
             arrayDesc.NumChannels = 4;
             arrayDesc.Format = CU_AD_FORMAT_FLOAT;
             CUarray device_tex_array;
             checkCudaError(cuArrayCreate(&device_tex_array, &arrayDesc));
+
+            BUS_TRACE_POINT();
 
             copy_canvas_to_cuda_array(device_tex_array, canvas.get());
 
@@ -665,6 +675,8 @@ void Material_gpu_context::prepare_texture(MDL::ITransaction* transaction,
             m_all_texture_arrays->push_back(device_tex_array);
         }
 
+        BUS_TRACE_POINT();
+
         // For cube maps we need clamped address mode to avoid artifacts in the
         // corners
         CUaddress_mode addr_mode =
@@ -673,7 +685,7 @@ void Material_gpu_context::prepare_texture(MDL::ITransaction* transaction,
             CU_TR_ADDRESS_MODE_WRAP;
 
         // Create filtered texture object
-        CUDA_TEXTURE_DESC tex_desc;
+        CUDA_TEXTURE_DESC tex_desc = {};
         memset(&tex_desc, 0, sizeof(tex_desc));
         tex_desc.addressMode[0] = addr_mode;
         tex_desc.addressMode[1] = addr_mode;
@@ -693,6 +705,8 @@ void Material_gpu_context::prepare_texture(MDL::ITransaction* transaction,
         checkCudaError(
             cuTexObjectCreate(&tex_obj, &res_desc, &tex_desc, nullptr));
 
+        BUS_TRACE_POINT();
+
         // Create unfiltered texture object if necessary (cube textures have no
         // texel functions)
         CUtexObject tex_obj_unfilt = 0;
@@ -707,6 +721,8 @@ void Material_gpu_context::prepare_texture(MDL::ITransaction* transaction,
                                              &tex_desc, nullptr));
         }
 
+        BUS_TRACE_POINT();
+
         // Store texture infos in result vector
         textures.push_back(Texture(tex_obj, tex_obj_unfilt,
                                    { tex_width, tex_height, tex_layers }));
@@ -715,242 +731,232 @@ void Material_gpu_context::prepare_texture(MDL::ITransaction* transaction,
     BUS_TRACE_END();
 }
 
-namespace {
-    bool prepare_mbsdfs_part(MDL::Mbsdf_part part,
-                             Mbsdf& mbsdf_cuda_representation,
-                             const MDL::IBsdf_measurement* bsdf_measurement) {
-        Handle<const MDL::Bsdf_isotropic_data> dataset;
-        switch(part) {
-            case MDL::MBSDF_DATA_REFLECTION:
-                dataset = bsdf_measurement
-                              ->get_reflection<MDL::Bsdf_isotropic_data>();
-                break;
-            case MDL::MBSDF_DATA_TRANSMISSION:
-                dataset = bsdf_measurement
-                              ->get_transmission<MDL::Bsdf_isotropic_data>();
-                break;
-        }
-
-        // no data, fine
-        if(!dataset)
-            return true;
-
-        // get dimensions
-        Uint2 res;
-        res.x = dataset->get_resolution_theta();
-        res.y = dataset->get_resolution_phi();
-        unsigned num_channels = dataset->get_type() == MDL::BSDF_SCALAR ? 1 : 3;
-        mbsdf_cuda_representation.Add(part, res, num_channels);
-
-        // get data
-        Handle<const MDL::IBsdf_buffer> buffer(
-            dataset->get_bsdf_buffer());
-        // {1,3} * (index_theta_in * (res_phi * res_theta) + index_theta_out *
-        // res_phi + index_phi)
-
-        const mi::Float32* src_data = buffer->get_data();
-
-        // ----------------------------------------------------------------------------------------
-        // prepare importance sampling data:
-        // - for theta_in we will be able to perform a two stage CDF, first to
-        // select theta_out,
-        //   and second to select phi_out
-        // - maximum component is used to "probability" in case of colored
-        // measurements
-
-        // CDF of the probability to select a certain theta_out for a given
-        // theta_in
-        const unsigned int cdf_theta_size = res.x * res.x;
-
-        // for each of theta_in x theta_out combination, a CDF of the
-        // probabilities to select a a certain theta_out is stored
-        const unsigned sample_data_size =
-            cdf_theta_size + cdf_theta_size * res.y;
-        float* sample_data = new float[sample_data_size];
-
-        float* albedo_data = new float[res.x];  // albedo for sampling
-                                                // reflection and transmission
-
-        float* sample_data_theta =
-            sample_data;  // begin of the first (theta) CDF
-        float* sample_data_phi =
-            sample_data + cdf_theta_size;  // begin of the second (phi) CDFs
-
-        const float s_theta = (float)(M_PI * 0.5) / float(res.x);  // step size
-        const float s_phi = (float)(M_PI) / float(res.y);          // step size
-
-        float max_albedo = 0.0f;
-        for(unsigned int t_in = 0; t_in < res.x; ++t_in) {
-            float sum_theta = 0.0f;
-            float sintheta0_sqd = 0.0f;
-            for(unsigned int t_out = 0; t_out < res.x; ++t_out) {
-                const float sintheta1 = sinf(float(t_out + 1) * s_theta);
-                const float sintheta1_sqd = sintheta1 * sintheta1;
-
-                // BSDFs are symmetric: f(w_in, w_out) = f(w_out, w_in)
-                // take the average of both measurements
-
-                // area of two the surface elements (the ones we are averaging)
-                const float mu = (sintheta1_sqd - sintheta0_sqd) * s_phi * 0.5f;
-                sintheta0_sqd = sintheta1_sqd;
-
-                // offset for both the thetas into the measurement data (select
-                // row in the volume)
-                const unsigned int offset_phi = (t_in * res.x + t_out) * res.y;
-                const unsigned int offset_phi2 = (t_out * res.x + t_in) * res.y;
-
-                // build CDF for phi
-                float sum_phi = 0.0f;
-                for(unsigned int p_out = 0; p_out < res.y; ++p_out) {
-                    const unsigned int idx = offset_phi + p_out;
-                    const unsigned int idx2 = offset_phi2 + p_out;
-
-                    float value = 0.0f;
-                    if(num_channels == 3) {
-                        value = fmax(fmaxf(src_data[3 * idx + 0],
-                                           src_data[3 * idx + 1]),
-                                     fmaxf(src_data[3 * idx + 2], 0.0f)) +
-                            fmax(fmaxf(src_data[3 * idx2 + 0],
-                                       src_data[3 * idx2 + 1]),
-                                 fmaxf(src_data[3 * idx2 + 2], 0.0f));
-                    } else /* num_channels == 1 */
-                    {
-                        value = fmaxf(src_data[idx], 0.0f) +
-                            fmaxf(src_data[idx2], 0.0f);
-                    }
-
-                    sum_phi += value * mu;
-                    sample_data_phi[idx] = sum_phi;
-                }
-
-                // normalize CDF for phi
-                for(unsigned int p_out = 0; p_out < res.y; ++p_out) {
-                    const unsigned int idx = offset_phi + p_out;
-                    sample_data_phi[idx] = sample_data_phi[idx] / sum_phi;
-                }
-
-                // build CDF for theta
-                sum_theta += sum_phi;
-                sample_data_theta[t_in * res.x + t_out] = sum_theta;
-            }
-
-            if(sum_theta > max_albedo)
-                max_albedo = sum_theta;
-
-            albedo_data[t_in] = sum_theta;
-
-            // normalize CDF for theta
-            for(unsigned int t_out = 0; t_out < res.x; ++t_out) {
-                const unsigned int idx = t_in * res.x + t_out;
-                sample_data_theta[idx] = sample_data_theta[idx] / sum_theta;
-            }
-        }
-
-        // copy entire CDF data buffer to GPU
-        CUdeviceptr sample_obj = 0;
-        checkCudaError(
-            cuMemAlloc(&sample_obj, sample_data_size * sizeof(float)));
-        checkCudaError(cuMemcpyHtoD(sample_obj, sample_data,
-                                    sample_data_size * sizeof(float)));
-        delete[] sample_data;
-
-        CUdeviceptr albedo_obj = 0;
-        checkCudaError(cuMemAlloc(&albedo_obj, res.x * sizeof(float)));
-        checkCudaError(
-            cuMemcpyHtoD(albedo_obj, albedo_data, res.x * sizeof(float)));
-        delete[] albedo_data;
-
-        mbsdf_cuda_representation.sample_data[part] =
-            reinterpret_cast<float*>(sample_obj);
-        mbsdf_cuda_representation.albedo_data[part] =
-            reinterpret_cast<float*>(albedo_obj);
-        mbsdf_cuda_representation.max_albedo[part] = max_albedo;
-
-        // ----------------------------------------------------------------------------------------
-        // prepare evaluation data:
-        // - simply store the measured data in a volume texture
-        // - in case of color data, we store each sample in a vector4 to get
-        // texture support
-        unsigned lookup_channels = (num_channels == 3) ? 4 : 1;
-
-        // make lookup data symmetric
-        float* lookup_data = new float[lookup_channels * res.y * res.x * res.x];
-        for(unsigned int t_in = 0; t_in < res.x; ++t_in) {
-            for(unsigned int t_out = 0; t_out < res.x; ++t_out) {
-                const unsigned int offset_phi = (t_in * res.x + t_out) * res.y;
-                const unsigned int offset_phi2 = (t_out * res.x + t_in) * res.y;
-                for(unsigned int p_out = 0; p_out < res.y; ++p_out) {
-                    const unsigned int idx = offset_phi + p_out;
-                    const unsigned int idx2 = offset_phi2 + p_out;
-
-                    if(num_channels == 3) {
-                        lookup_data[4 * idx + 0] =
-                            (src_data[3 * idx + 0] + src_data[3 * idx2 + 0]) *
-                            0.5f;
-                        lookup_data[4 * idx + 1] =
-                            (src_data[3 * idx + 1] + src_data[3 * idx2 + 1]) *
-                            0.5f;
-                        lookup_data[4 * idx + 2] =
-                            (src_data[3 * idx + 2] + src_data[3 * idx2 + 2]) *
-                            0.5f;
-                        lookup_data[4 * idx + 3] = 1.0f;
-                    } else {
-                        lookup_data[idx] =
-                            (src_data[idx] + src_data[idx2]) * 0.5f;
-                    }
-                }
-            }
-        }
-
-        // Copy data to GPU array
-        CUarray device_mbsdf_data;
-        CUDA_ARRAY3D_DESCRIPTOR arrayDesc;
-        arrayDesc.Width = res.y;
-        arrayDesc.Height = res.x;
-        arrayDesc.Depth = res.x;
-        arrayDesc.Format = CU_AD_FORMAT_FLOAT;
-        arrayDesc.NumChannels = lookup_channels;
-
-        // Allocate a 3D array on the GPU (phi_delta x theta_out x theta_in)
-        // cudaExtent extent = make_cudaExtent(res.y, res.x, res.x);
-        checkCudaError(cuArray3DCreate(&device_mbsdf_data, &arrayDesc));
-
-        // prepare and copy
-        CUDA_MEMCPY3D copy_params;
-        memset(&copy_params, 0, sizeof(copy_params));
-        copy_params.srcHost = lookup_data;
-        copy_params.srcPitch = res.y * lookup_channels * sizeof(float);
-        copy_params.srcMemoryType = CU_MEMORYTYPE_HOST;
-
-        copy_params.dstArray = device_mbsdf_data;
-        copy_params.dstMemoryType = CU_MEMORYTYPE_ARRAY;
-        copy_params.WidthInBytes = res.y * lookup_channels * sizeof(float);
-        copy_params.Height = res.x;
-        copy_params.Depth = res.x;
-        checkCudaError(cuMemcpy3D(&copy_params));
-        delete[] lookup_data;
-
-        CUDA_RESOURCE_DESC texRes;
-        memset(&texRes, 0, sizeof(texRes));
-        texRes.resType = CU_RESOURCE_TYPE_ARRAY;
-        texRes.res.array.hArray = device_mbsdf_data;
-
-        CUDA_TEXTURE_DESC texDescr;
-        memset(&texDescr, 0, sizeof(texDescr));
-        texDescr.flags = CU_TRSF_NORMALIZED_COORDINATES;
-        texDescr.filterMode = CU_TR_FILTER_MODE_LINEAR;
-        texDescr.addressMode[0] = CU_TR_ADDRESS_MODE_CLAMP;
-        texDescr.addressMode[1] = CU_TR_ADDRESS_MODE_CLAMP;
-        texDescr.addressMode[2] = CU_TR_ADDRESS_MODE_CLAMP;
-
-        CUtexObject eval_tex_obj;
-        checkCudaError(
-            cuTexObjectCreate(&eval_tex_obj, &texRes, &texDescr, nullptr));
-        mbsdf_cuda_representation.eval_data[part] = eval_tex_obj;
-
-        return true;
+static bool
+prepare_mbsdfs_part(MDL::Mbsdf_part part, Mbsdf& mbsdf_cuda_representation,
+                    const MDL::IBsdf_measurement* bsdf_measurement) {
+    Handle<const MDL::Bsdf_isotropic_data> dataset;
+    switch(part) {
+        case MDL::MBSDF_DATA_REFLECTION:
+            dataset =
+                bsdf_measurement->get_reflection<MDL::Bsdf_isotropic_data>();
+            break;
+        case MDL::MBSDF_DATA_TRANSMISSION:
+            dataset =
+                bsdf_measurement->get_transmission<MDL::Bsdf_isotropic_data>();
+            break;
     }
-}  // namespace
+
+    // no data, fine
+    if(!dataset)
+        return true;
+
+    // get dimensions
+    Uint2 res;
+    res.x = dataset->get_resolution_theta();
+    res.y = dataset->get_resolution_phi();
+    unsigned num_channels = dataset->get_type() == MDL::BSDF_SCALAR ? 1 : 3;
+    mbsdf_cuda_representation.Add(part, res, num_channels);
+
+    // get data
+    Handle<const MDL::IBsdf_buffer> buffer(dataset->get_bsdf_buffer());
+    // {1,3} * (index_theta_in * (res_phi * res_theta) + index_theta_out *
+    // res_phi + index_phi)
+
+    const mi::Float32* src_data = buffer->get_data();
+
+    // ----------------------------------------------------------------------------------------
+    // prepare importance sampling data:
+    // - for theta_in we will be able to perform a two stage CDF, first to
+    // select theta_out,
+    //   and second to select phi_out
+    // - maximum component is used to "probability" in case of colored
+    // measurements
+
+    // CDF of the probability to select a certain theta_out for a given
+    // theta_in
+    const unsigned int cdf_theta_size = res.x * res.x;
+
+    // for each of theta_in x theta_out combination, a CDF of the
+    // probabilities to select a a certain theta_out is stored
+    const unsigned sample_data_size = cdf_theta_size + cdf_theta_size * res.y;
+    float* sample_data = new float[sample_data_size];
+
+    float* albedo_data = new float[res.x];  // albedo for sampling
+                                            // reflection and transmission
+
+    float* sample_data_theta = sample_data;  // begin of the first (theta) CDF
+    float* sample_data_phi =
+        sample_data + cdf_theta_size;  // begin of the second (phi) CDFs
+
+    const float s_theta = (float)(M_PI * 0.5) / float(res.x);  // step size
+    const float s_phi = (float)(M_PI) / float(res.y);          // step size
+
+    float max_albedo = 0.0f;
+    for(unsigned int t_in = 0; t_in < res.x; ++t_in) {
+        float sum_theta = 0.0f;
+        float sintheta0_sqd = 0.0f;
+        for(unsigned int t_out = 0; t_out < res.x; ++t_out) {
+            const float sintheta1 = sinf(float(t_out + 1) * s_theta);
+            const float sintheta1_sqd = sintheta1 * sintheta1;
+
+            // BSDFs are symmetric: f(w_in, w_out) = f(w_out, w_in)
+            // take the average of both measurements
+
+            // area of two the surface elements (the ones we are averaging)
+            const float mu = (sintheta1_sqd - sintheta0_sqd) * s_phi * 0.5f;
+            sintheta0_sqd = sintheta1_sqd;
+
+            // offset for both the thetas into the measurement data (select
+            // row in the volume)
+            const unsigned int offset_phi = (t_in * res.x + t_out) * res.y;
+            const unsigned int offset_phi2 = (t_out * res.x + t_in) * res.y;
+
+            // build CDF for phi
+            float sum_phi = 0.0f;
+            for(unsigned int p_out = 0; p_out < res.y; ++p_out) {
+                const unsigned int idx = offset_phi + p_out;
+                const unsigned int idx2 = offset_phi2 + p_out;
+
+                float value = 0.0f;
+                if(num_channels == 3) {
+                    value = fmax(fmaxf(src_data[3 * idx + 0],
+                                       src_data[3 * idx + 1]),
+                                 fmaxf(src_data[3 * idx + 2], 0.0f)) +
+                        fmax(fmaxf(src_data[3 * idx2 + 0],
+                                   src_data[3 * idx2 + 1]),
+                             fmaxf(src_data[3 * idx2 + 2], 0.0f));
+                } else /* num_channels == 1 */
+                {
+                    value = fmaxf(src_data[idx], 0.0f) +
+                        fmaxf(src_data[idx2], 0.0f);
+                }
+
+                sum_phi += value * mu;
+                sample_data_phi[idx] = sum_phi;
+            }
+
+            // normalize CDF for phi
+            for(unsigned int p_out = 0; p_out < res.y; ++p_out) {
+                const unsigned int idx = offset_phi + p_out;
+                sample_data_phi[idx] = sample_data_phi[idx] / sum_phi;
+            }
+
+            // build CDF for theta
+            sum_theta += sum_phi;
+            sample_data_theta[t_in * res.x + t_out] = sum_theta;
+        }
+
+        if(sum_theta > max_albedo)
+            max_albedo = sum_theta;
+
+        albedo_data[t_in] = sum_theta;
+
+        // normalize CDF for theta
+        for(unsigned int t_out = 0; t_out < res.x; ++t_out) {
+            const unsigned int idx = t_in * res.x + t_out;
+            sample_data_theta[idx] = sample_data_theta[idx] / sum_theta;
+        }
+    }
+
+    // copy entire CDF data buffer to GPU
+    CUdeviceptr sample_obj = 0;
+    checkCudaError(cuMemAlloc(&sample_obj, sample_data_size * sizeof(float)));
+    checkCudaError(cuMemcpyHtoD(sample_obj, sample_data,
+                                sample_data_size * sizeof(float)));
+    delete[] sample_data;
+
+    CUdeviceptr albedo_obj = 0;
+    checkCudaError(cuMemAlloc(&albedo_obj, res.x * sizeof(float)));
+    checkCudaError(
+        cuMemcpyHtoD(albedo_obj, albedo_data, res.x * sizeof(float)));
+    delete[] albedo_data;
+
+    mbsdf_cuda_representation.sample_data[part] =
+        reinterpret_cast<float*>(sample_obj);
+    mbsdf_cuda_representation.albedo_data[part] =
+        reinterpret_cast<float*>(albedo_obj);
+    mbsdf_cuda_representation.max_albedo[part] = max_albedo;
+
+    // ----------------------------------------------------------------------------------------
+    // prepare evaluation data:
+    // - simply store the measured data in a volume texture
+    // - in case of color data, we store each sample in a vector4 to get
+    // texture support
+    unsigned lookup_channels = (num_channels == 3) ? 4 : 1;
+
+    // make lookup data symmetric
+    float* lookup_data = new float[lookup_channels * res.y * res.x * res.x];
+    for(unsigned int t_in = 0; t_in < res.x; ++t_in) {
+        for(unsigned int t_out = 0; t_out < res.x; ++t_out) {
+            const unsigned int offset_phi = (t_in * res.x + t_out) * res.y;
+            const unsigned int offset_phi2 = (t_out * res.x + t_in) * res.y;
+            for(unsigned int p_out = 0; p_out < res.y; ++p_out) {
+                const unsigned int idx = offset_phi + p_out;
+                const unsigned int idx2 = offset_phi2 + p_out;
+
+                if(num_channels == 3) {
+                    lookup_data[4 * idx + 0] =
+                        (src_data[3 * idx + 0] + src_data[3 * idx2 + 0]) * 0.5f;
+                    lookup_data[4 * idx + 1] =
+                        (src_data[3 * idx + 1] + src_data[3 * idx2 + 1]) * 0.5f;
+                    lookup_data[4 * idx + 2] =
+                        (src_data[3 * idx + 2] + src_data[3 * idx2 + 2]) * 0.5f;
+                    lookup_data[4 * idx + 3] = 1.0f;
+                } else {
+                    lookup_data[idx] = (src_data[idx] + src_data[idx2]) * 0.5f;
+                }
+            }
+        }
+    }
+
+    // Copy data to GPU array
+    CUarray device_mbsdf_data;
+    CUDA_ARRAY3D_DESCRIPTOR arrayDesc = {};
+    arrayDesc.Width = res.y;
+    arrayDesc.Height = res.x;
+    arrayDesc.Depth = res.x;
+    arrayDesc.Format = CU_AD_FORMAT_FLOAT;
+    arrayDesc.NumChannels = lookup_channels;
+
+    // Allocate a 3D array on the GPU (phi_delta x theta_out x theta_in)
+    // cudaExtent extent = make_cudaExtent(res.y, res.x, res.x);
+    checkCudaError(cuArray3DCreate(&device_mbsdf_data, &arrayDesc));
+
+    // prepare and copy
+    CUDA_MEMCPY3D copy_params = {};
+    memset(&copy_params, 0, sizeof(copy_params));
+    copy_params.srcHost = lookup_data;
+    copy_params.srcPitch = res.y * lookup_channels * sizeof(float);
+    copy_params.srcMemoryType = CU_MEMORYTYPE_HOST;
+
+    copy_params.dstArray = device_mbsdf_data;
+    copy_params.dstMemoryType = CU_MEMORYTYPE_ARRAY;
+    copy_params.WidthInBytes = res.y * lookup_channels * sizeof(float);
+    copy_params.Height = res.x;
+    copy_params.Depth = res.x;
+    checkCudaError(cuMemcpy3D(&copy_params));
+    delete[] lookup_data;
+
+    CUDA_RESOURCE_DESC texRes = {};
+    memset(&texRes, 0, sizeof(texRes));
+    texRes.resType = CU_RESOURCE_TYPE_ARRAY;
+    texRes.res.array.hArray = device_mbsdf_data;
+
+    CUDA_TEXTURE_DESC texDescr = {};
+    memset(&texDescr, 0, sizeof(texDescr));
+    texDescr.flags = CU_TRSF_NORMALIZED_COORDINATES;
+    texDescr.filterMode = CU_TR_FILTER_MODE_LINEAR;
+    texDescr.addressMode[0] = CU_TR_ADDRESS_MODE_CLAMP;
+    texDescr.addressMode[1] = CU_TR_ADDRESS_MODE_CLAMP;
+    texDescr.addressMode[2] = CU_TR_ADDRESS_MODE_CLAMP;
+
+    CUtexObject eval_tex_obj;
+    checkCudaError(
+        cuTexObjectCreate(&eval_tex_obj, &texRes, &texDescr, nullptr));
+    mbsdf_cuda_representation.eval_data[part] = eval_tex_obj;
+
+    return true;
+}
 
 void Material_gpu_context::prepare_mbsdf(MDL::ITransaction* transaction,
                                          MDL::ITarget_code const* code_ptx,
@@ -1070,22 +1076,29 @@ void Material_gpu_context::prepare_lightprofile(
         // cudaChannelFormatDesc channel_desc = cudaCreateChannelDesc<float>();
 
         // 2D texture objects use CUDA arrays
-        CUDA_ARRAY_DESCRIPTOR arrayDesc;
+        CUDA_ARRAY_DESCRIPTOR arrayDesc = {};
         arrayDesc.Width = res.x;
         arrayDesc.Height = res.y;
         arrayDesc.Format = CU_AD_FORMAT_FLOAT;
         arrayDesc.NumChannels = 1;
         checkCudaError(cuArrayCreate(&device_lightprofile_data, &arrayDesc));
-        checkCudaError(cuMemcpyHtoA(device_lightprofile_data, 0, data,
-                                    res.x * res.y * sizeof(float)));
+        CUDA_MEMCPY2D copyParam = {};
+        copyParam.WidthInBytes = res.x * sizeof(float);
+        copyParam.Height = res.y;
+        copyParam.srcHost = data;
+        copyParam.srcMemoryType = CU_MEMORYTYPE_HOST;
+        copyParam.dstArray = device_lightprofile_data;
+        copyParam.dstMemoryType = CU_MEMORYTYPE_ARRAY;
+
+        checkCudaError(cuMemcpy2D(&copyParam));
 
         // Create filtered texture object
-        CUDA_RESOURCE_DESC res_desc;
+        CUDA_RESOURCE_DESC res_desc = {};
         memset(&res_desc, 0, sizeof(res_desc));
         res_desc.resType = CU_RESOURCE_TYPE_ARRAY;
         res_desc.res.array.hArray = device_lightprofile_data;
 
-        CUDA_TEXTURE_DESC tex_desc;
+        CUDA_TEXTURE_DESC tex_desc = {};
         memset(&tex_desc, 0, sizeof(tex_desc));
         tex_desc.addressMode[0] = CU_TR_ADDRESS_MODE_CLAMP;
         tex_desc.addressMode[1] = CU_TR_ADDRESS_MODE_CLAMP;
@@ -1215,8 +1228,7 @@ void Material_gpu_context::update_device_argument_block(size_t i) {
     if(device_ptr == 0)
         return;
 
-    Handle<MDL::ITarget_argument_block> arg_block(
-        get_argument_block(i));
+    Handle<MDL::ITarget_argument_block> arg_block(get_argument_block(i));
     checkCudaError(
         cuMemcpyHtoD(device_ptr, arg_block->get_data(), arg_block->get_size()));
 }
@@ -1345,6 +1357,7 @@ Material_compiler::Material_compiler(MDL::IMdl_compiler* mdl_compiler,
         check_success(m_be_cuda_ptx->set_option("num_texture_spaces", "1") ==
                       0);
 
+        // TODO:enable_ro_segment
         // Option "enable_ro_segment": Default is disabled.
         // If you have a lot of big arrays, enabling this might speed up
         // compilation.
@@ -1359,9 +1372,6 @@ Material_compiler::Material_compiler(MDL::IMdl_compiler* mdl_compiler,
                               "texture_runtime_with_derivs", "on") == 0);
         }
 
-        // Option "tex_lookup_call_mode": Default mode is vtable mode.
-        // You can switch to the slower vtable mode by commenting out the next
-        // line.
         check_success(m_be_cuda_ptx->set_option("tex_lookup_call_mode",
                                                 "direct_call") == 0);
 
@@ -1436,9 +1446,8 @@ Material_compiler::get_material_names(const std::string& module_name) {
 
         const char* prefix = (module_name.find("::") == 0) ? "mdl" : "mdl::";
 
-        Handle<const MDL::IModule> module(
-            m_transaction->access<MDL::IModule>(
-                (prefix + module_name).c_str()));
+        Handle<const MDL::IModule> module(m_transaction->access<MDL::IModule>(
+            (prefix + module_name).c_str()));
 
         mi::Size num_materials = module->get_material_count();
         std::vector<std::string> material_names(num_materials);
@@ -1522,8 +1531,7 @@ MDL::ICompiled_material* Material_compiler::compile_material_instance(
 }
 
 // Generates CUDA PTX target code for the current link unit.
-Handle<const MDL::ITarget_code>
-Material_compiler::generate_cuda_ptx() {
+Handle<const MDL::ITarget_code> Material_compiler::generate_cuda_ptx() {
     BUS_TRACE_BEG() {
         Handle<const MDL::ITarget_code> code_cuda_ptx(
             m_be_cuda_ptx->translate_link_unit(m_link_unit.get(),
@@ -1597,4 +1605,64 @@ bool Material_compiler::add_material(
         function_descriptions[0].argument_block_index);
 
     return m_context->get_error_messages_count() == 0;
+}
+
+#include "DataDesc.hpp"
+
+class MDLCUDAHelper : private Unmoveable {
+public:
+    virtual std::string genPTX() = 0;
+    virtual DataDesc getData() = 0;
+    virtual mi::Uint32 getUsage() = 0;
+};
+
+class MDLCUDAHelperImpl : public MDLCUDAHelper {
+private:
+    Material_compiler mCompiler;
+    Material_gpu_context mContext;
+    Handle<const MDL::ITarget_code> mCode;
+
+public:
+    MDLCUDAHelperImpl(Context& context, const std::string& module,
+                      const std::string& mat)
+        // TODO:num_texture_results,  enable_derivatives, fold_ternary_on_df
+        : mCompiler(context.compiler, context.factory, context.transaction, 0,
+                    false, false),
+          mContext(false) {
+        BUS_TRACE_BEG() {
+            check_success(
+                mCompiler.add_material_df(mat, "surface.scattering", "bsdf"));
+            mCode = mCompiler.generate_cuda_ptx();
+            check_success(mCode.is_valid_interface());
+            Handle<MDL::IImage_api> image_api(
+                context.neuary->get_api_component<MDL::IImage_api>());
+            std::vector<size_t> data;
+            mi::Size argID =
+                mCode->get_callable_function_argument_block_index(0);
+            if(argID != ~mi::Size(0))
+                data.push_back(argID);
+            mContext.prepare_target_code_data(
+                context.transaction, image_api.get(), mCode.get(), data);
+        }
+        BUS_TRACE_END();
+    }
+    std::string genPTX() override {
+        return mCode->get_code();
+    }
+    DataDesc getData() override {
+        DataDesc res;
+        // TODO:Context Singleton
+        res.argData = reinterpret_cast<char*>(
+            mContext.get_device_target_argument_block(0));
+        res.resource = mContext.get_device_target_code_data_list();
+        return res;
+    }
+    mi::Uint32 getUsage() override {
+        return mCode->get_render_state_usage();
+    }
+};
+
+std::shared_ptr<MDLCUDAHelper>
+getHelper(Context& context, const std::string& module, const std::string& mat) {
+    return std::make_shared<MDLCUDAHelperImpl>(context, module, mat);
 }
