@@ -288,7 +288,6 @@ void renderImpl(std::shared_ptr<Config> config, const fs::path& scenePath,
         OptixPipelineLinkOptions PLO = {};
         PLO.debugLevel = MCO.debugLevel;
         PLO.maxTraceDepth = 2;
-        PLO.overrideUsesMotionBlur = 0;
         checkOptixError(
             optixPipelineCreate(context.get(), &PCO, &PLO, linearGroup.data(),
                                 static_cast<unsigned>(linearGroup.size()),

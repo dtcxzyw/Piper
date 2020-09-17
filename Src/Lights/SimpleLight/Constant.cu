@@ -2,5 +2,5 @@
 #include "DataDesc.hpp"
 
 DEVICE void __miss__rad() {
-    getPayload()->rad = getSBTData<Constant>()->lum;
+    getPayload()->rad = getSBTData<ConstantData>()->lum;
 }

@@ -4,7 +4,7 @@
 DEVICE LightSample __continuation_callable__sample(const Vec3& pos,
                                                    float rayTime,
                                                    SamplerContext& sampler) {
-    auto light = getSBTData<DirLight>();
+    auto light = getSBTData<DirLightData>();
     unsigned noHit = 0;
     optixTrace(launchParam.root, v2f(pos), v2f(light->negDir), eps, 1e20f,
                rayTime, 255,

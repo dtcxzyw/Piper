@@ -126,7 +126,7 @@ public:
             mGroup.reset(group);
             DataDesc data = mHelper->getData();
             mData.group = group;
-            mData.maxSampleDim = 3;
+            mData.maxSampleDim = 4;
             mData.radData = packSBTRecord(group, data);
             mData.dss = 0;
             OptixStackSizes size;

@@ -92,7 +92,7 @@ DEVICE void bsdf_sample(MDL::Bsdf_sample_data* data,
                         const MDL::Resource_data* res_data,
                         const void* exception_state,
                         const char* arg_block_data);
-DEVICE void bsdf_evaluate(MDL::Bsdf_evaluate_data* data,
+DEVICE void bsdf_evaluate(MDL::Bsdf_evaluate_data<MDL::DF_HSM_NONE>* data,
                           MDL::Shading_state_material* state,
                           const MDL::Resource_data* res_data,
                           const void* exception_state,
@@ -1059,6 +1059,13 @@ struct Target_code_data {
                                   // segment, if used
 };
 
+DEVICE MDL::tct_float3 v2fmdl(const Vec3& vec) {
+    return { vec.x, vec.y, vec.z };
+}
+
+DEVICE Vec3 f2vmdl(const MDL::tct_float3& vec) {
+    return { vec.x, vec.y, vec.z };
+}
 DEVICE void __continuation_callable__sample(Payload* payload, Vec3 dir,
                                             Vec3 hit, Vec3 ng, Vec3 ns,
                                             Vec2 texCoord, float rayTime,
@@ -1111,18 +1118,18 @@ DEVICE void __continuation_callable__sample(Payload* payload, Vec3 dir,
     {
         MDL::Bsdf_sample_data sampleF;
         if(front) {
-            sampleF.ior1 = make_float3(1.0f, 1.0f, 1.0f);
+            sampleF.ior1 = { 1.0f, 1.0f, 1.0f };
             sampleF.ior2.x = MI_NEURAYLIB_BSDF_USE_MATERIAL_IOR;
         } else {
             sampleF.ior1.x = MI_NEURAYLIB_BSDF_USE_MATERIAL_IOR;
-            sampleF.ior2 = make_float3(1.0f, 1.0f, 1.0f);
+            sampleF.ior2 = { 1.0f, 1.0f, 1.0f };
         }
 
-        sampleF.k1 = v2f(-dir);
-        sampleF.xi = make_float3(sampler(), sampler(), sampler());
+        sampleF.k1 = v2fmdl(-dir);
+        sampleF.xi = { sampler(), sampler(), sampler(), sampler() };
         bsdf_sample(&sampleF, &mat, &resData, nullptr, data->argData);
-        payload->f = f2v(sampleF.bsdf_over_pdf);
-        payload->wi = f2v(sampleF.k2);
+        payload->f = f2vmdl(sampleF.bsdf_over_pdf);
+        payload->wi = f2vmdl(sampleF.k2);
         payload->ori = hit +
             (sampleF.event_type & MDL::BSDF_EVENT_TRANSMISSION ? -offset :
                                                                  offset);
@@ -1130,20 +1137,21 @@ DEVICE void __continuation_callable__sample(Payload* payload, Vec3 dir,
     }
     // sample light
     {
-        MDL::Bsdf_evaluate_data evalF;
+        MDL::Bsdf_evaluate_data<MDL::DF_HSM_NONE> evalF;
         if(front) {
-            evalF.ior1 = make_float3(1.0f, 1.0f, 1.0f);
+            evalF.ior1 = { 1.0f, 1.0f, 1.0f };
             evalF.ior2.x = MI_NEURAYLIB_BSDF_USE_MATERIAL_IOR;
         } else {
             evalF.ior1.x = MI_NEURAYLIB_BSDF_USE_MATERIAL_IOR;
-            evalF.ior2 = make_float3(1.0f, 1.0f, 1.0f);
+            evalF.ior2 = { 1.0f, 1.0f, 1.0f };
         }
         LightSample ls =
             sampleOneLight(hit + (front ? offset : -offset), rayTime, sampler);
         evalF.k1 = v2f(-dir);
         evalF.k2 = v2f(ls.wi);
         bsdf_evaluate(&evalF, &mat, &resData, nullptr, data->argData);
-        payload->rad = ls.rad * f2v(evalF.bsdf);
+        payload->rad =
+            ls.rad * (f2vmdl(evalF.bsdf_diffuse) /*+ f2vmdl(evalF.bsdf_glossy)*/);
         // TODO:light importance sampling
     }
 }
